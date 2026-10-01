@@ -1,68 +1,113 @@
-# AI Usage Log & Disclosure
+# AI usage
 
-[![Made with AI](https://img.shields.io/badge/Made_with-AI_assistance-blue)](AI-USAGE.md)
+This project was built with AI assistance. This file is the record of it. It is
+graded as the finals badge, and it is worth 100 points.
 
-This project was built with the assistance of **Antigravity (Google DeepMind)**, adhering to the 80/20 rule: at least 20% of the codebase is manually authored and deeply understood, with all architectural decisions, debugging, and integrations actively verified.
+Start it in week 1 and keep it up as you go. The commit history of this file is
+part of the evidence: a file written all at once the night before the deadline
+looks exactly like what it is.
 
----
+## 1. How I used AI
 
-## 1. How I Used AI (Entries)
+At least six entries. One per real use. Every entry needs a commit link.
 
-### Entry 1: Architecture Planning, Schema Design & Deliverable Breakdown
-* **Date:** 2026-09-21
-* **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
-* **What I asked for:** Analyze the course guidelines (`finals/`), badging rubrics (`finals-badge/`), and my proposal (`project/PROPOSAL.md`). Propose an architecture fitting the 3-day Week 1 sprint with Supabase and Tailwind CSS.
-* **What it gave back:** A full architectural plan, normalized relational PostgreSQL schema (with self-referencing subtasks), dual-mode client adapter strategy, and a prioritized 3-week roadmap.
-* **What I kept, what I changed, and why:** Kept the database schema and dual-mode architecture. Changed the auth strategy from full JWT to an app-level password gate (`alfa2026`) as permitted by the course security checklist (item 18/20) to maintain rapid delivery during the 3-day sprint.
-* **Commit link:** `e6f5c19` (docs: initialize AI-USAGE.md with architectural plan and disclosure)
+### 2026-09-21 - Architecture planning and database schema
 
-### Entry 2: Scaffolding the Focus Hub UI Layout & Tailwind Tokens
-* **Date:** 2026-09-21
-* **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
-* **What I asked for:** Generate the React and Tailwind component layout for the Today & Focus Hub screen matching the Dark Mode theme and tokens from `Design_System.pdf` (#09090B background, #18181B surface, #10B981 accent).
-* **What it gave back:** A modular 3-column layout (Sidebar navigation, Today's Focus checklist with progress bars, and the active task focus timer card) connected to a dual-mode API adapter.
-* **What I kept, what I changed, and why:** Kept the responsive layout and Tailwind color tokens. Adjusted the card spacing and button typography to strictly match the 8px spatial rhythm specified in the design system.
-* **Commit link:** `ca254ca` (feat(ui): configure Tailwind CSS and scaffold Focus Hub view with dark mode and emerald tokens)
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Review course requirements and my project proposal for AlfaFocus. Help me plan an MVP architecture using React, Tailwind CSS, Express, and PostgreSQL (Supabase) that can be delivered cleanly in phases.
+- **What it gave back:** A full project roadmap, a normalized relational PostgreSQL schema (with self-referencing subtasks and focus sessions), and an outline for a dual-mode API setup.
+- **What I kept, what I changed, and why:** Kept the database schema and general roadmap. Decided to use an app-level password gate instead of full multi-user authentication for now, because it fits the course security checklist and keeps the Week 1 sprint focused on core features.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/e6f5c19
 
----
+### 2026-09-21 - Focus Hub layout and Tailwind styling
 
-## 2. Where the AI Got It Wrong
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Help generate the 3-column layout for the Today & Focus Hub page based on my wireframes and the Dark Mode design system tokens (#09090B background, #18181B cards, #10B981 emerald accent).
+- **What it gave back:** A responsive React component with a navigation sidebar, today's checklist, and the right-hand active timer card, all styled with Tailwind.
+- **What I kept, what I changed, and why:** Kept the component structure and colors. Adjusted the spacing, buttons, and card borders to follow the 8px grid spacing from our design system.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/ca254ca
 
-### Case 1: Browser Background Throttling & Timer Drift in Countdown Hook
-* **Date / Phase:** Week 1 (2026-09-21)
-* **What it gave back:** An initial `useTimer` implementation relying on standard React `useEffect` with `setInterval(() => setTimeLeft(t => t - 1), 1000)`.
-* **What was wrong with it:** In modern browsers (Chrome/Edge/Brave), background tabs or inactive windows aggressively throttle `setInterval` executions to once every 60 seconds (or pause them entirely to conserve CPU/battery). During testing, switching tabs caused a 25-minute Pomodoro timer to take over 35 real-world minutes to elapse, completely breaking productivity timing.
-* **What I did instead:** Rewrote the countdown engine to rely on timestamp delta math rather than consecutive 1-second ticks. I saved the target completion timestamp (`expectedEndRef.current = Date.now() + timeLeft * 1000`) and polled remaining time via delta calculation (`Math.round((expectedEnd - Date.now()) / 1000)`) on a 250ms polling loop. When tabs wake from throttling, the timer instantly recalculates the true remaining seconds accurately with zero accumulated drift.
-* **Commit link:** `9c3f451` (feat(timer): implement self-authored useTimer hook with drift prevention and modes)
+### YYYY-MM-DD - (Week 2 entry)
 
-### Case 2: [Week 2 Planned - e.g. Recursive Subtask Cascades / State Sync]
-* **What it gave back:**
-* **What was wrong with it:**
-* **What I did instead:**
-* **Commit link:**
+- **Tool:**
+- **What I asked for:**
+- **What it gave back:**
+- **What I kept, what I changed, and why:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
 
-### Case 3: [Week 3 Planned - e.g. Deployment / Environment / Cloud Database Connection]
-* **What it gave back:**
-* **What was wrong with it:**
-* **What I did instead:**
-* **Commit link:**
+### YYYY-MM-DD - (Week 2 entry)
 
----
+- **Tool:**
+- **What I asked for:**
+- **What it gave back:**
+- **What I kept, what I changed, and why:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
 
-## 3. Who Wrote What
+### YYYY-MM-DD - (Week 3 entry)
 
-### Code I Wrote Myself ($\ge 20\%$ of the project)
+- **Tool:**
+- **What I asked for:**
+- **What it gave back:**
+- **What I kept, what I changed, and why:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
 
-1. **`useTimer` Custom Hook (`client/src/hooks/useTimer.js`)**
-   * **Commit:** `9c3f451` (feat(timer): implement self-authored useTimer hook with drift prevention and modes)
-   * **Explanation:** I wrote the timer logic from scratch rather than relying on naive `setInterval(..., 1000)` calls that suffer from browser throttling in background tabs. I used timestamp deltas to calculate precise remaining time, handled mode switches (25m Pomodoro, 50m Deep Work, untimed Stopwatch), and integrated the HTML5 audio chime trigger on completion.
+### YYYY-MM-DD - (Week 3 entry)
 
-2. **Input Validation Logic (`server/utils/validators.js`)**
-   * **Commit:** `71ce2b2` (feat(server): add task and session endpoints, password gate, validation, and PostgreSQL schema/seed)
-   * **Explanation:** I wrote the server-side validation functions to sanitize task titles, validate ISO date formats for due dates, and enforce allowed priority enumerations (`low`, `medium`, `high`) before executing SQL queries.
+- **Tool:**
+- **What I asked for:**
+- **What it gave back:**
+- **What I kept, what I changed, and why:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
 
-### AI-Written Code I Understand Deeply
+## 2. Where the AI got it wrong
 
-1. **Dual-Mode API Adapter (`client/src/api/index.js`, `mockApi.js`, `httpApi.js`)**
-   * **Commit:** `ca254ca` (feat(ui): configure Tailwind CSS and scaffold Focus Hub view with dark mode and emerald tokens)
-   * **Explanation:** The AI generated the abstraction layer that checks `import.meta.env.VITE_USE_MOCK_API`. If true (the default in development and on GitHub Pages), all CRUD operations read and write to `localStorage` simulating latency with promises. If false, it delegates requests to the Express backend. This allows the GitHub Pages deployment to work without a server while sharing the exact same method signatures used by the production API.
+Three cases. Be specific. If you write that the AI was never wrong, this section
+scores zero.
+
+### Case 1 - Background timer drift in countdown hook
+
+- **What it gave me:** A basic React countdown hook that used `setInterval` to decrease the remaining time by 1 every 1000ms.
+- **What was wrong with it:** When you switch to another browser tab or minimize the window, modern browsers intentionally slow down timers to save CPU and battery. When I tested it in another tab, a 25-minute Pomodoro session ended up taking more than 35 real minutes because intervals were being throttled.
+- **What I did instead:** Instead of subtracting 1 second on every tick, I recalculated the time by checking the real clock. When the timer starts, it calculates the target end timestamp (`Date.now() + duration`). Then it runs a quick 250ms check that calculates `(targetTime - Date.now())`. Even if the browser pauses the tab, it immediately snaps back to the exact correct second when you look at it.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/9c3f451
+
+### Case 2 - (Week 2 case)
+
+- **What it gave me:**
+- **What was wrong with it:**
+- **What I did instead:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+
+### Case 3 - (Week 3 case)
+
+- **What it gave me:**
+- **What was wrong with it:**
+- **What I did instead:**
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+
+## 3. Who wrote what
+
+At least a fifth of this project is code you wrote yourself. Name it, and explain
+it in your own words.
+
+> Group projects: give each member their own heading below, and use your GitHub
+> handle as the heading. You are graded on your own section.
+
+### Written by me
+
+- **File:** `client/src/hooks/useTimer.js`
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/9c3f451
+- **What it does and why it is built this way:**
+  This is the custom hook that runs the Pomodoro, Deep Work, and Stopwatch timers. It holds the timer state (running, paused, time left, and mode) and plays a chime when time runs out. I built it to compare against `Date.now()` timestamps rather than blindly counting down seconds with `setInterval`. This ensures that even if you browse other tabs or the laptop goes to sleep briefly, the timer never drifts or loses accuracy.
+
+- **File:** `server/utils/validators.js`
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/71ce2b2
+- **What it does and why it is built this way:**
+  This file validates request data on the server before anything touches PostgreSQL. It makes sure task titles are not blank, trims whitespace, and ensures priorities are only set to allowed values (`low`, `medium`, or `high`). I wrote this as clean, native JavaScript helper functions so that we do not have to rely on an external validation library, keeping our backend lightweight, safe from invalid data, and easy to debug.
+
+### The AI-written part I understand best
+
+- **File:** `client/src/api/index.js` (with `mockApi.js` and `httpApi.js`)
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/ca254ca
+- **What it does and why we kept it:**
+  This is the dual-mode API adapter. It looks at the environment variable `VITE_USE_MOCK_API`. If it is unset or true, it reads and writes tasks from the browser's `localStorage` with a small fake delay. If set to false, it sends real HTTP requests to our Express server. We kept this because it lets our site deploy and work immediately on GitHub Pages without needing a live backend right away, while sharing the exact same function signatures (`listTasks`, `createTask`) that our components use.
