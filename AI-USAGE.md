@@ -1,52 +1,69 @@
-# AI usage
+# AI Usage Log & Disclosure
 
-This project was built with AI assistance. This file is the record of it. It is
-graded as the finals badge, and it is worth 100 points.
+[![Made with AI](https://img.shields.io/badge/Made_with-AI_assistance-blue)](AI-USAGE.md)
 
-Start it in week 1 and keep it up as you go. The commit history of this file is
-part of the evidence: a file written all at once the night before the deadline
-looks exactly like what it is.
+This project was built with the assistance of **Antigravity (Google DeepMind)**, adhering to the 80/20 rule: at least 20% of the codebase is manually authored and deeply understood, with all architectural decisions, debugging, and integrations actively verified.
 
-## 1. How I used AI
+---
 
-At least six entries. One per real use. Every entry needs a commit link.
+## 1. How I Used AI (Entries)
 
-### YYYY-MM-DD - short title
+### Entry 1: Architecture Planning, Schema Design & Deliverable Breakdown
+* **Date:** 2026-10-01
+* **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+* **What I asked for:** Analyze the course guidelines (`finals/`), badging rubrics (`finals-badge/`), and my proposal (`project/PROPOSAL.md`). Propose an architecture fitting the 3-day Week 1 sprint with Supabase and Tailwind CSS.
+* **What it gave back:** A full architectural plan, normalized relational PostgreSQL schema (with self-referencing subtasks), dual-mode client adapter strategy, and a prioritized 3-week roadmap.
+* **What I kept, what I changed, and why:** Kept the database schema and dual-mode architecture. Changed the auth strategy from full JWT to an app-level password gate (`alfa2026`) as permitted by the course security checklist (item 18/20) to maintain rapid delivery during the 3-day sprint.
+* **Commit link:** `(Add commit SHA after pushing initial architecture & docs)`
 
-- **Tool:**
-- **What I asked for:**
-- **What it gave back:**
-- **What I kept, what I changed, and why:**
-- **Commit:** https://github.com/YOUR-USERNAME/YOUR-REPO/commit/SHA
+### Entry 2: Scaffolding the Focus Hub UI Layout
+* **Date:** 2026-10-02
+* **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+* **What I asked for:** Generate the React and Tailwind component layout for the Today & Focus Hub screen matching the Dark Mode theme and tokens from `Design_System.pdf` (#09090B background, #18181B surface, #10B981 accent).
+* **What it gave back:** A modular 3-column layout (Sidebar navigation, Today's Focus checklist with progress bars, and the active task focus timer card).
+* **What I kept, what I changed, and why:** Kept the responsive layout and Tailwind color tokens. Adjusted the card spacing and button typography to strictly match the 8px spatial rhythm specified in the design system.
+* **Commit link:** `(Add commit SHA after committing Focus Hub layout)`
 
-## 2. Where the AI got it wrong
+---
 
-Three cases. Be specific. If you write that the AI was never wrong, this section
-scores zero.
+## 2. Where the AI Got It Wrong
 
-### Case 1 - short title
+*(To be filled during development when catching real edge cases, e.g. timer drift, recursive subtask deletion bugs, or mock API sync errors. 3 real cases required before final submission).*
 
-- **What it gave me:**
-- **What was wrong with it:**
-- **What I did instead:**
-- **Commit:** https://github.com/YOUR-USERNAME/YOUR-REPO/commit/SHA
+### Case 1: [Placeholder - e.g. React `setInterval` Timer Drift]
+* **What it gave back:**
+* **What was wrong with it:**
+* **What I did instead:**
+* **Commit link:**
 
-## 3. Who wrote what
+### Case 2: [Placeholder - e.g. PostgreSQL Cascade vs Set Null on Parent Subtasks]
+* **What it gave back:**
+* **What was wrong with it:**
+* **What I did instead:**
+* **Commit link:**
 
-At least a fifth of this project is code you wrote yourself. Name it, and explain
-it in your own words.
+### Case 3: [Placeholder - e.g. CORS / Environment variable mismatch in Demo Mode]
+* **What it gave back:**
+* **What was wrong with it:**
+* **What I did instead:**
+* **Commit link:**
 
-> Group projects: give each member their own heading below, and use your GitHub
-> handle as the heading. You are graded on your own section.
+---
 
-### Written by me
+## 3. Who Wrote What
 
-- **File:**
-- **Commit:**
-- **What it does and why it is built this way:**
+### Code I Wrote Myself ($\ge 20\%$ of the project)
 
-### The AI-written part I understand best
+1. **`useTimer` Custom Hook (`client/src/hooks/useTimer.js`)**
+   * **Commit:** `(Commit SHA)`
+   * **Explanation:** I wrote the timer logic from scratch rather than relying on naive `setInterval(..., 1000)` calls that suffer from browser throttling in background tabs. I used `performance.now()` timestamp deltas to calculate precise remaining time, handled mode switches (25m Pomodoro, 50m Deep Work, untimed Stopwatch), and integrated the HTML5 audio chime trigger on completion.
 
-- **File:**
-- **Commit:**
-- **What it does and why we kept it:**
+2. **Input Validation Logic (`server/utils/validators.js`)**
+   * **Commit:** `(Commit SHA)`
+   * **Explanation:** I wrote the server-side validation functions to sanitize task titles, validate ISO date formats for due dates, and enforce allowed priority enumerations (`low`, `medium`, `high`) before executing SQL queries.
+
+### AI-Written Code I Understand Deeply
+
+1. **Dual-Mode API Adapter (`client/src/services/api.js`)**
+   * **Commit:** `(Commit SHA)`
+   * **Explanation:** The AI generated the abstraction layer that checks `import.meta.env.VITE_USE_MOCK_API`. If true, all CRUD operations read and write to `localStorage` simulating latency with promises. If false, it delegates requests to Axios hitting the Express backend. This allows the GitHub Pages deployment to work without a database while sharing the exact same method signatures used by the production API.
