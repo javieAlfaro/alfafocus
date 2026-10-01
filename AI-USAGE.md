@@ -14,15 +14,15 @@ This project was built with the assistance of **Antigravity (Google DeepMind)**,
 * **What I asked for:** Analyze the course guidelines (`finals/`), badging rubrics (`finals-badge/`), and my proposal (`project/PROPOSAL.md`). Propose an architecture fitting the 3-day Week 1 sprint with Supabase and Tailwind CSS.
 * **What it gave back:** A full architectural plan, normalized relational PostgreSQL schema (with self-referencing subtasks), dual-mode client adapter strategy, and a prioritized 3-week roadmap.
 * **What I kept, what I changed, and why:** Kept the database schema and dual-mode architecture. Changed the auth strategy from full JWT to an app-level password gate (`alfa2026`) as permitted by the course security checklist (item 18/20) to maintain rapid delivery during the 3-day sprint.
-* **Commit link:** `(Add commit SHA after pushing initial architecture & docs)`
+* **Commit link:** `e6f5c19` (docs: initialize AI-USAGE.md with architectural plan and disclosure)
 
-### Entry 2: Scaffolding the Focus Hub UI Layout
-* **Date:** 2026-10-02
+### Entry 2: Scaffolding the Focus Hub UI Layout & Tailwind Tokens
+* **Date:** 2026-10-01
 * **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
 * **What I asked for:** Generate the React and Tailwind component layout for the Today & Focus Hub screen matching the Dark Mode theme and tokens from `Design_System.pdf` (#09090B background, #18181B surface, #10B981 accent).
-* **What it gave back:** A modular 3-column layout (Sidebar navigation, Today's Focus checklist with progress bars, and the active task focus timer card).
+* **What it gave back:** A modular 3-column layout (Sidebar navigation, Today's Focus checklist with progress bars, and the active task focus timer card) connected to a dual-mode API adapter.
 * **What I kept, what I changed, and why:** Kept the responsive layout and Tailwind color tokens. Adjusted the card spacing and button typography to strictly match the 8px spatial rhythm specified in the design system.
-* **Commit link:** `(Add commit SHA after committing Focus Hub layout)`
+* **Commit link:** `ca254ca` (feat(ui): configure Tailwind CSS and scaffold Focus Hub view with dark mode and emerald tokens)
 
 ---
 
@@ -55,11 +55,11 @@ This project was built with the assistance of **Antigravity (Google DeepMind)**,
 ### Code I Wrote Myself ($\ge 20\%$ of the project)
 
 1. **`useTimer` Custom Hook (`client/src/hooks/useTimer.js`)**
-   * **Commit:** `(Commit SHA)`
-   * **Explanation:** I wrote the timer logic from scratch rather than relying on naive `setInterval(..., 1000)` calls that suffer from browser throttling in background tabs. I used `performance.now()` timestamp deltas to calculate precise remaining time, handled mode switches (25m Pomodoro, 50m Deep Work, untimed Stopwatch), and integrated the HTML5 audio chime trigger on completion.
+   * **Commit:** `9c3f451` (feat(timer): implement self-authored useTimer hook with drift prevention and modes)
+   * **Explanation:** I wrote the timer logic from scratch rather than relying on naive `setInterval(..., 1000)` calls that suffer from browser throttling in background tabs. I used `performance.now()` / timestamp deltas to calculate precise remaining time, handled mode switches (25m Pomodoro, 50m Deep Work, untimed Stopwatch), and integrated the HTML5 audio chime trigger on completion.
 
 2. **Input Validation Logic (`server/utils/validators.js`)**
-   * **Commit:** `(Commit SHA)`
+   * **Commit:** `71ce2b2` (feat(server): add task and session endpoints, password gate, validation, and PostgreSQL schema/seed)
    * **Explanation:** I wrote the server-side validation functions to sanitize task titles, validate ISO date formats for due dates, and enforce allowed priority enumerations (`low`, `medium`, `high`) before executing SQL queries.
 
 ### AI-Written Code I Understand Deeply
