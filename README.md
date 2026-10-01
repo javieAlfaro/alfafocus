@@ -1,156 +1,116 @@
-# Your Project Name
+# AlfaFocus
 
-> **Replace this whole file.** It is a worked example of the README your project
-> will be graded from, not a file to leave as it is. Start with
-> [START-HERE.md](START-HERE.md).
+[![Made with AI](https://img.shields.io/badge/Made_with-AI_assistance-blue)](AI-USAGE.md)
 
-One sentence saying what this does and who it is for.
+> Built with the assistance of **Antigravity (Google DeepMind)**, adhering to the course AI policy with $\ge 20\%$ self-authored code. See the full disclosure and commit references in [AI-USAGE.md](AI-USAGE.md).
 
-**Live site:** https://yourusername.github.io/your-repo-name/
-**API:** https://your-api.onrender.com/healthz
-**Demo video:** (link)
+AlfaFocus is an all-in-one productivity web application designed to help users organize daily tasks, decompose complex projects into nested subtasks, schedule deadlines on an interactive calendar, and build habit consistency through customizable focus timers, streaks, and activity heat maps.
 
-> **This deployment is running in demo mode.** The interface is real; the backend
-> is simulated in your browser so the site works without a server. See
-> [Demo mode](#demo-mode) below. Delete this quote once your API is live.
+* **Live site (GitHub Pages):** https://javiealfaro.github.io/alfafocus/
+* **API (Week 3 Live):** https://alfafocus-api.onrender.com/healthz
+* **Demo video:** *(Week 3 Submission)*
 
-![A screenshot of the main screen](docs/assets/screenshot.png)
+> **This deployment is running in demo mode.** The interface is fully functional; the backend is simulated in your browser using `localStorage` so the site works without a server. Once the cloud API is live, setting `VITE_USE_MOCK_API=false` seamlessly routes all calls to the Express and PostgreSQL backend.
+
+---
 
 ## What it does
 
-- Report a sighting with a place, a description and a spookiness rating
-- Browse everything reported, newest first
-- Delete a report
+* **Focus Hub & Hybrid Timer:** Run 25m Pomodoro, 50m Deep Work, or untimed Stopwatch focus sessions with drift-free tracking and completion alerts.
+* **Daily Smart Checklist:** Rapidly create tasks, toggle completion status, monitor subtask progress bars, and filter by category (`WORK`, `PERSONAL`, `STUDY`).
+* **Active Task Locking:** Pin any daily task directly into the active timer card to stay locked into high-priority objectives.
+* **Dual-Mode Data Layer:** Seamlessly switches between in-browser `localStorage` simulation and live Express + PostgreSQL database.
+
+---
 
 ## Built with
 
-React and Vite on the front end, Express and PostgreSQL on the back end. The
-client is on GitHub Pages, the API on (host), the database on (host).
+* **Frontend:** React 18, Vite, **Tailwind CSS**, `lucide-react` icons. Deployed to **GitHub Pages**.
+* **Backend:** Node.js, Express, `cors`, `pg` (node-postgres with strictly parameterized queries).
+* **Database:** PostgreSQL (hosted on **Supabase**), relational schema supporting recursive tasks and focus sessions.
+* **Access Gate:** App-level password protection (`x-app-password`) satisfying course security guidelines.
 
-## Demo mode
-
-This repository can run two ways, chosen by one environment variable at **build**
-time.
-
-**Demo mode is the default.** Only the exact string `false` turns it off, so a
-forgotten or mistyped variable leaves you on the simulated backend with a visible
-notice rather than on a silently broken build.
-
-| `VITE_USE_MOCK_API` | What happens |
-| --- | --- |
-| unset, or `true` | The client answers its own requests from `localStorage`. No server, no database, nothing shared between visitors. This is what the template ships with, so the GitHub Pages link works on day one. |
-| `false` | The client calls the Express API at `VITE_API_BASE_URL`, which reads and writes real PostgreSQL. |
-
-**Demo mode is a starting point and a fallback, not a finished project.** Your
-finals submission is all three pieces deployed and talking to each other. Demo
-mode is there so you can build the interface in week one before the API exists,
-and so you have something to show if a free tier is asleep during your demo.
-
-GitHub Pages serves files and cannot run Node, so the API and the database can
-never live there. They go somewhere else:
-
-| Piece | Options |
-| --- | --- |
-| **API** | Render, Railway, Fly.io, Koyeb, a VPS, or [self-hosted behind a tunnel](../content/extending-your-app/11-self-hosting.md) |
-| **Database** | Neon, Supabase, Railway, Aiven, or your own PostgreSQL |
-
-`content/extending-your-app/` in your course workspace walks through all of it.
-Page 10 is the decision page if you do not know which to pick.
+---
 
 ## Running it yourself
 
-**The client only, in demo mode.** No database needed.
+### 1. The client only (Demo Mode, no database required)
 
-    cd client
-    npm install
-    cp .env.example .env        # VITE_USE_MOCK_API stays true
-    npm run dev                 # http://localhost:5173
+```bash
+cd client
+npm install
+cp .env.example .env        # VITE_USE_MOCK_API stays true by default
+npm run dev                 # http://localhost:5173
+```
 
-**The whole stack.** Needs a PostgreSQL, either local or hosted.
+### 2. The full stack (Client + Express + PostgreSQL)
 
-    # 1. the database
-    docker run --name my-pg -e POSTGRES_PASSWORD=devpassword \
-      -e POSTGRES_DB=haunted -p 5432:5432 -d postgres:17
+```bash
+# Step 1: Start the API
+cd server
+npm install
+cp .env.example .env        # Set your DATABASE_URL and APP_PASSWORD
+npm run dev                 # http://localhost:3000
 
-    # 2. the API
-    cd server
-    npm install
-    cp .env.example .env        # check DATABASE_URL
-    npm run db:reset            # creates the tables and adds sample rows
-    npm run dev                 # http://localhost:3000
+# Step 2: In a separate terminal, start the client with live API enabled
+cd client
+# Ensure client/.env has VITE_USE_MOCK_API=false and VITE_API_BASE_URL=http://localhost:3000
+npm run dev
+```
 
-    # 3. the client, in another terminal
-    cd client
-    npm install
-    cp .env.example .env
-    # set VITE_USE_MOCK_API=false
-    npm run dev
+### API Health Check Verification:
+```bash
+curl http://localhost:3000/healthz     # Verify server process is alive
+curl http://localhost:3000/readyz      # Verify PostgreSQL connection is up
+```
 
-Check the API on its own before you blame the client:
+---
 
-    curl http://localhost:3000/healthz     # is the process alive
-    curl http://localhost:3000/readyz      # is the database reachable
-    curl http://localhost:3000/api/sightings
+## Project Structure
 
-## Environment variables
+```
+alfafocus/
+├── client/                     # React + Vite frontend
+│   ├── src/
+│   │   ├── api/                # Unified API interface (mockApi.js & httpApi.js)
+│   │   ├── components/         # FocusHub, DemoNotice, and UI components
+│   │   ├── hooks/              # Self-authored useTimer.js custom hook
+│   │   └── styles.css          # Tailwind CSS layer directives
+│   └── tailwind.config.js      # Design system color tokens (Zinc & Emerald)
+├── server/                     # Express.js REST API
+│   ├── db/                     # pool.js, schema.sql, and seed.sql
+│   ├── utils/                  # Server-side input validators
+│   ├── tasksRepo.js            # Parameterized PostgreSQL queries ($1, $2)
+│   └── server.js               # Express app, security gate, and route handlers
+├── AI-USAGE.md                 # Detailed AI assistance log and commit evidence
+└── README.md                   # Project documentation
+```
 
-None of these are committed. `.env.example` in each folder lists them with
-placeholder values.
+---
 
-| Name | Where | What it is |
-| --- | --- | --- |
-| `DATABASE_URL` | server | PostgreSQL connection string. Contains a password |
-| `CORS_ORIGINS` | server | comma-separated origins allowed to call the API |
-| `NODE_ENV` | server | `production` on your host |
-| `PORT` | server | **set by the host**, do not set it yourself |
-| `VITE_USE_MOCK_API` | client, at build time | only `false` turns demo mode off; unset means on |
-| `VITE_API_BASE_URL` | client, at build time | your API's public URL, no trailing slash |
+## Environment Variables
 
-Every `VITE_` value is compiled into the built JavaScript and is **public**.
-Never put a key, a password or a connection string in one.
+| Name | Where | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `server/.env` | PostgreSQL connection string (Supabase) |
+| `APP_PASSWORD` | `server/.env` | Access gate password protecting API routes |
+| `CORS_ORIGINS` | `server/.env` | Allowed client origins (e.g., `http://localhost:5173`) |
+| `VITE_USE_MOCK_API` | `client/.env` | Set to `false` for live API; unset/true for browser demo mode |
+| `VITE_API_BASE_URL` | `client/.env` | URL of the live Express API |
 
-## Deploying
+---
 
-**Client, to GitHub Pages.** Already wired up in
-`.github/workflows/deploy-pages.yml`. Two one-time steps:
+## Known Issues and Next Steps
 
-1. **Settings > Pages > Build and deployment > Source: GitHub Actions.** Without
-   this the workflow goes green and publishes nothing.
-2. Nothing else, until your API is live. Demo mode is the default, so the first
-   deploy works on its own. When the API is up, add `VITE_USE_MOCK_API` = `false`
-   and `VITE_API_BASE_URL` under **Settings > Secrets and variables > Actions >
-   Variables**, then re-run the workflow.
+* **Current Status (Week 1):** Focus Hub, Today Checklist, and drift-free `useTimer` countdown hook are fully functional in Demo Mode.
+* **Next Steps for Week 2:**
+  1. Implement multi-tier nested subtask trees with recursive client rendering.
+  2. Log completed focus sessions to generate the GitHub-style activity heat map.
+  3. Complete and submit `SECURITY-CHECKLIST.md`.
 
-The repository must be **public** for Pages to serve it on a free account.
+---
 
-**API and database.** Not automated here, because most hosts deploy straight from
-your repository with no workflow at all. Point your host at the `server/` folder,
-set the environment variables in its dashboard, and run `server/db/schema.sql`
-once against the hosted database.
+## Author & License
 
-## Project structure
-
-    client/          React front end, built by Vite
-      src/api/       ONE interface, two implementations, chosen by a variable
-      src/components/
-    server/          Express API
-      db/            pool, schema.sql, seed.sql, and a runner for them
-    compose.yml      only if you self-host
-    docs/            your planning documents and weekly reports
-
-## Architecture
-
-Three or four sentences, or a small diagram. Which piece talks to which, and
-where each one is hosted.
-
-## What I would do next
-
-Three honest bullets. This paragraph is worth more than it looks.
-
-## Author
-
-Your name, and a link. Course and section.
-
-## Licence
-
-MIT, see [LICENSE](LICENSE). Put your own name in it.
+* **Developer:** Javier Alfaro (BSCS - 4th Year, 6APSI)
+* **License:** MIT, see [LICENSE](LICENSE)
