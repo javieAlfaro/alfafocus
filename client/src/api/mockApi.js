@@ -1,75 +1,70 @@
-// The simulated backend.
-//
-// Same function names, same return types, and the same shape of failure as
-// httpApi.js, so your components cannot tell the difference. Data lives in the
-// visitor's own browser and goes no further.
-//
-// This exists so the template's GitHub Pages link works on day one and so you
-// can build the interface before your API is deployed. It is NOT a finished
-// project. See content/extending-your-app page 3.
-
+// Simulated backend for AlfaFocus
 import seed from './seed.json'
 
-const KEY = 'final-project:sightings'
+const TASKS_KEY = 'alfafocus:tasks'
+const SESSIONS_KEY = 'alfafocus:focus_sessions'
 
-// A real network is not instant. Keeping this delay is what forces you to build
-// a loading state now, while it is cheap, instead of discovering you need one
-// the day you switch to the real API.
-const delay = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms))
+const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms))
 
-function read() {
-  const stored = localStorage.getItem(KEY)
+function readTasks() {
+  const stored = localStorage.getItem(TASKS_KEY)
   if (stored) {
     try {
       return JSON.parse(stored)
     } catch {
-      // Corrupted storage. Start again rather than crashing the app.
-      localStorage.removeItem(KEY)
+      localStorage.removeItem(TASKS_KEY)
     }
   }
-  localStorage.setItem(KEY, JSON.stringify(seed))
+  localStorage.setItem(TASKS_KEY, JSON.stringify(seed))
   return seed
 }
 
-function write(rows) {
-  localStorage.setItem(KEY, JSON.stringify(rows))
+function writeTasks(rows) {
+  localStorage.setItem(TASKS_KEY, JSON.stringify(rows))
   return rows
 }
 
-export async function listSightings() {
+export async function listTasks() {
   await delay()
-  return read().slice().sort((a, b) => b.reported_at.localeCompare(a.reported_at))
+  return readTasks().slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 }
 
-export async function getSighting(id) {
-  await delay()
-  const found = read().find((row) => String(row.id) === String(id))
-  if (!found) throw new Error('Not found')
-  return found
-}
-
-export async function createSighting(input) {
+export async function createTask(input) {
   await delay()
   const created = {
     ...input,
-    id: crypto.randomUUID(),
-    reported_at: new Date().toISOString(),
+    id: 'task-' + crypto.randomUUID().slice(0, 8),
+    completed: false,
+    progress: 0,
+    created_at: new Date().toISOString(),
   }
-  write([...read(), created])
+  writeTasks([created, ...readTasks()])
   return created
 }
 
-export async function updateSighting(id, input) {
+export async function updateTask(id, input) {
   await delay()
-  const rows = read()
+  const rows = readTasks()
   const index = rows.findIndex((row) => String(row.id) === String(id))
-  if (index === -1) throw new Error('Not found')
+  if (index === -1) throw new Error('Task not found')
   rows[index] = { ...rows[index], ...input }
-  write(rows)
+  writeTasks(rows)
   return rows[index]
 }
 
-export async function deleteSighting(id) {
+export async function deleteTask(id) {
   await delay()
-  write(read().filter((row) => String(row.id) !== String(id)))
+  writeTasks(readTasks().filter((row) => String(row.id) !== String(id)))
+}
+
+export async function recordFocusSession(session) {
+  await delay()
+  const existing = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]')
+  const newSession = {
+    id: 'session-' + crypto.randomUUID().slice(0, 8),
+    ...session,
+    completed_at: new Date().toISOString(),
+  }
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify([newSession, ...existing]))
+  return newSession
 }

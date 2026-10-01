@@ -1,40 +1,60 @@
-// The real client. Every function here talks to YOUR Express API.
-//
-// This is the file that matters for your finals project. mockApi.js exists so
-// you can build the interface before this has anywhere to point.
+const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+const appPassword = import.meta.env.VITE_APP_PASSWORD || 'alfa2026'
 
-const BASE = import.meta.env.VITE_API_BASE_URL || ''
+async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-app-password': appPassword,
+    ...(options.headers || {}),
+  }
 
-async function request(path, options) {
-  const response = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch(`${baseUrl}${path}`, {
     ...options,
+    headers,
   })
 
   if (!response.ok) {
-    // Try to use the API's own message; fall back to the status line.
-    let message = `${response.status} ${response.statusText}`
+    let message = 'Request failed'
     try {
       const body = await response.json()
-      if (body?.error) message = body.error
+      message = body.error || message
     } catch {
-      // The body was not JSON. The status line is all we have.
+      // Non-JSON error response
     }
     throw new Error(message)
   }
 
-  return response.status === 204 ? null : response.json()
+  if (response.status === 204) return null
+  return response.json()
 }
 
-export const listSightings = () => request('/api/sightings')
+export function listTasks() {
+  return request('/api/tasks')
+}
 
-export const getSighting = (id) => request(`/api/sightings/${id}`)
+export function createTask(input) {
+  return request('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
 
-export const createSighting = (input) =>
-  request('/api/sightings', { method: 'POST', body: JSON.stringify(input) })
+export function updateTask(id, input) {
+  return request(`/api/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
 
-export const updateSighting = (id, input) =>
-  request(`/api/sightings/${id}`, { method: 'PUT', body: JSON.stringify(input) })
+export function deleteTask(id) {
+  return request(`/api/tasks/${id}`, {
+    method: 'DELETE',
+  })
+}
 
-export const deleteSighting = (id) =>
-  request(`/api/sightings/${id}`, { method: 'DELETE' })
+export function recordFocusSession(session) {
+  return request('/api/focus/sessions', {
+    method: 'POST',
+    body: JSON.stringify(session),
+  })
+}
