@@ -1,20 +1,52 @@
--- The complete shape of the database. Safe to run against an empty database,
--- and safe to run twice.
---
--- This file is committed on purpose. Your schema is a fact about your
--- application, not a runtime concern: it should be readable by opening a file
--- rather than by connecting to a server. It is also what lets you move to a
--- hosted database in one command.
+-- =========================================================
+-- AlfaFocus PostgreSQL Database Schema
+-- Safe to run against an empty database, and safe to run twice.
+-- =========================================================
 
-CREATE TABLE IF NOT EXISTS sightings (
-  id          SERIAL PRIMARY KEY,
-  place       TEXT        NOT NULL,
-  description TEXT        NOT NULL DEFAULT '',
-  spookiness  INTEGER     NOT NULL CHECK (spookiness BETWEEN 1 AND 5),
-  reported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+-- 1. Users (for multi-user support or single-user isolation)
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- The list page always sorts newest first. Without this the database reads
--- every row and sorts it on each request.
-CREATE INDEX IF NOT EXISTS sightings_reported_at_idx
-  ON sightings (reported_at DESC);
+-- 2. Task Lists / Folders
+CREATE TABLE IF NOT EXISTS task_lists (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(100) NOT NULL,
+    color VARCHAR(20) DEFAULT '#059669',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 3. Tasks & Nested Subtasks (Adjacency List Model)
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    list_id INT REFERENCES task_lists(id) ON DELETE SET NULL,
+    parent_task_id INT REFERENCES tasks(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    category VARCHAR(50) DEFAULT 'WORK',
+    priority VARCHAR(10) CHECK (priority IN ('low', 'medium', 'high')) DEFAULT 'medium',
+    due_date DATE,
+    progress INT DEFAULT 0,
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 4. Focus Sessions (Feeds the Pomodoro history and Heat Map)
+CREATE TABLE IF NOT EXISTS focus_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    task_id INT REFERENCES tasks(id) ON DELETE SET NULL,
+    task_title VARCHAR(255),
+    mode VARCHAR(20) NOT NULL,
+    duration_minutes INT NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Indexes for performance and quick lookups
+CREATE INDEX IF NOT EXISTS tasks_created_at_idx ON tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS tasks_parent_idx ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS focus_sessions_completed_at_idx ON focus_sessions(completed_at DESC);

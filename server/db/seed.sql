@@ -1,27 +1,39 @@
--- Sample data for development.
---
--- This starts with TRUNCATE. That is correct on your laptop and catastrophic
--- against the database your live demo depends on. Check which DATABASE_URL is
--- loaded before you run it.
+-- =========================================================
+-- AlfaFocus Seed Data (Invented Sample Data)
+-- Safe to run after schema.sql.
+-- =========================================================
 
-TRUNCATE TABLE sightings RESTART IDENTITY CASCADE;
+-- Create default user
+INSERT INTO users (id, username)
+VALUES (1, 'default_user')
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO sightings (place, description, spookiness, reported_at) VALUES
-  ('Library, third floor',
-   'Chairs rearranged overnight, every time. The night guard says he locks the room himself.',
-   3, now() - interval '12 days'),
-  ('Old gym',
-   'Lights flicker in a fixed pattern after 9pm, always three short and one long.',
-   4, now() - interval '10 days'),
-  ('Parking basement',
-   'Footsteps with no one there. Reported separately by three different people in one week, which is what makes this one hard to dismiss. Two of them were alone at the time and did not know about the others. This row is deliberately long, because a seed of four words hides every text-wrapping bug you have.',
-   5, now() - interval '8 days'),
-  ('Canteen',
-   'A cold spot near the back door, every morning before seven.',
-   1, now() - interval '7 days'),
-  ('AB Building stairwell',
-   '',
-   2, now() - interval '5 days'),
-  ('Chapel garden',
-   'Someone humming. Stops the moment you turn around.',
-   3, now() - interval '2 days');
+-- Reset sequence for users
+SELECT setval('users_id_seq', (SELECT GREATEST(MAX(id), 1) FROM users));
+
+-- Create sample task lists
+INSERT INTO task_lists (id, user_id, title, color)
+VALUES 
+  (1, 1, 'AlfaFocus Redesign', '#059669'),
+  (2, 1, 'Marketing Q1', '#3B82F6'),
+  (3, 1, 'Personal Routines', '#8B5CF6')
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval('task_lists_id_seq', (SELECT GREATEST(MAX(id), 1) FROM task_lists));
+
+-- Create sample tasks matching Wireframe Page 10
+INSERT INTO tasks (id, user_id, list_id, title, category, priority, progress, completed)
+VALUES 
+  (1, 1, 1, 'Finalize AlfaFocus Design Wireframes', 'WORK', 'high', 75, FALSE),
+  (2, 1, 2, 'Review Q1 Marketing Strategy', 'WORK', 'high', 20, FALSE),
+  (3, 1, 3, 'Morning Workout', 'PERSONAL', 'low', 100, TRUE),
+  (4, 1, 1, 'Configure PostgreSQL schema & endpoints', 'STUDY', 'medium', 40, FALSE)
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval('tasks_id_seq', (SELECT GREATEST(MAX(id), 1) FROM tasks));
+
+-- Create initial sample focus session
+INSERT INTO focus_sessions (user_id, task_id, task_title, mode, duration_minutes)
+VALUES 
+  (1, 1, 'Finalize AlfaFocus Design Wireframes', 'pomodoro', 25)
+ON CONFLICT DO NOTHING;

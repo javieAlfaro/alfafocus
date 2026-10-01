@@ -1,16 +1,12 @@
 import express from 'express'
 import cors from 'cors'
 import { pool } from './db/pool.js'
-import * as sightings from './sightingsRepo.js'
+import * as tasksRepo from './tasksRepo.js'
+import { validateTaskInput, validateFocusSessionInput } from './utils/validators.js'
 
 const app = express()
 
-// CORS before the routes. Middleware registered after a route never sees that
-// route's requests, which is the m4 lesson showing up in production.
-//
-// Name your origins. app.use(cors()) with no options sends
-// Access-Control-Allow-Origin: *, which lets any site on the internet call this
-// API from a visitor's browser, and is incompatible with cookies.
+// 1. CORS Configuration (Checklist #26: named origins, not wildcard)
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -19,13 +15,13 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
 app.use(cors({ origin: allowedOrigins }))
 app.use(express.json({ limit: '100kb' }))
 
-// Is the process alive?
+// 2. Health check endpoints
+// Process liveness
 app.get('/healthz', (request, response) => {
-  response.json({ ok: true })
+  response.json({ ok: true, app: 'AlfaFocus API' })
 })
 
-// Is the database reachable? A different question, and the one that tells you
-// in two seconds which half of a problem you have.
+// Database readiness
 app.get('/readyz', async (request, response) => {
   try {
     await pool.query('SELECT 1')
@@ -36,93 +32,97 @@ app.get('/readyz', async (request, response) => {
   }
 })
 
-// Validation lives on the server because the client can be bypassed. The
-// browser form is for a fast, friendly message; this is for correctness.
-function validate(body) {
-  const errors = []
-  const place = typeof body.place === 'string' ? body.place.trim() : ''
-  const description =
-    typeof body.description === 'string' ? body.description.trim() : ''
-  const spookiness = Number(body.spookiness)
+// 3. App Password Gate Middleware (Checklist #18-22: Access Layer)
+const APP_PASSWORD = process.env.APP_PASSWORD || 'alfa2026'
 
-  if (!place) errors.push('place is required')
-  if (place.length > 120) errors.push('place must be 120 characters or fewer')
-  if (description.length > 2000) errors.push('description must be 2000 characters or fewer')
-  if (!Number.isInteger(spookiness) || spookiness < 1 || spookiness > 5) {
-    errors.push('spookiness must be a whole number from 1 to 5')
+app.use('/api', (request, response, next) => {
+  // Allow OPTIONS preflight requests
+  if (request.method === 'OPTIONS') return next()
+  
+  const providedPassword = request.headers['x-app-password']
+  if (providedPassword !== APP_PASSWORD) {
+    return response.status(401).json({ error: 'Unauthorized: valid access PIN or password required.' })
   }
+  next()
+})
 
-  return { errors, value: { place, description, spookiness } }
-}
-
-app.get('/api/sightings', async (request, response, next) => {
+// 4. Task Endpoints
+app.get('/api/tasks', async (request, response, next) => {
   try {
-    response.json(await sightings.getAll(pool))
+    const tasks = await tasksRepo.getAllTasks(pool)
+    response.json(tasks)
   } catch (error) {
     next(error)
   }
 })
 
-app.get('/api/sightings/:id', async (request, response, next) => {
+app.post('/api/tasks', async (request, response, next) => {
+  const { isValid, errors, data } = validateTaskInput(request.body ?? {})
+  if (!isValid) return response.status(400).json({ error: errors.join('; ') })
+
   try {
-    const row = await sightings.getById(pool, request.params.id)
-    if (!row) return response.status(404).json({ error: 'Not found' })
-    response.json(row)
+    const created = await tasksRepo.createTask(pool, data)
+    response.status(201).json(created)
   } catch (error) {
     next(error)
   }
 })
 
-app.post('/api/sightings', async (request, response, next) => {
-  const { errors, value } = validate(request.body ?? {})
-  if (errors.length > 0) return response.status(400).json({ error: errors.join('; ') })
-
+app.patch('/api/tasks/:id', async (request, response, next) => {
   try {
-    response.status(201).json(await sightings.create(pool, value))
+    const updated = await tasksRepo.updateTask(pool, request.params.id, request.body ?? {})
+    if (!updated) return response.status(404).json({ error: 'Task not found' })
+    response.json(updated)
   } catch (error) {
     next(error)
   }
 })
 
-app.put('/api/sightings/:id', async (request, response, next) => {
-  const { errors, value } = validate(request.body ?? {})
-  if (errors.length > 0) return response.status(400).json({ error: errors.join('; ') })
-
+app.delete('/api/tasks/:id', async (request, response, next) => {
   try {
-    const row = await sightings.update(pool, request.params.id, value)
-    if (!row) return response.status(404).json({ error: 'Not found' })
-    response.json(row)
-  } catch (error) {
-    next(error)
-  }
-})
-
-app.delete('/api/sightings/:id', async (request, response, next) => {
-  try {
-    const removed = await sightings.remove(pool, request.params.id)
-    if (!removed) return response.status(404).json({ error: 'Not found' })
+    const removed = await tasksRepo.deleteTask(pool, request.params.id)
+    if (!removed) return response.status(404).json({ error: 'Task not found' })
     response.status(204).end()
   } catch (error) {
     next(error)
   }
 })
 
+// 5. Focus Session Endpoints
+app.get('/api/focus/sessions', async (request, response, next) => {
+  try {
+    const sessions = await tasksRepo.getAllFocusSessions(pool)
+    response.json(sessions)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/focus/sessions', async (request, response, next) => {
+  const { isValid, errors, data } = validateFocusSessionInput(request.body ?? {})
+  if (!isValid) return response.status(400).json({ error: errors.join('; ') })
+
+  try {
+    const logged = await tasksRepo.recordFocusSession(pool, data)
+    response.status(201).json(logged)
+  } catch (error) {
+    next(error)
+  }
+})
+
+// 404 Fallback
 app.use((request, response) => {
   response.status(404).json({ error: 'No such route' })
 })
 
-// The detail goes in your logs; the visitor gets a plain message. Sending a
-// stack trace to a stranger tells them about your file layout and dependencies.
+// 6. Centralized Error Handler (Checklist #25: Do not leak stack traces or connection details)
 app.use((error, request, response, next) => {
-  console.error(error)
+  console.error('[SERVER ERROR]:', error.message)
   response.status(500).json({ error: 'Something went wrong on the server' })
 })
 
-// The host chooses the port and tells you through PORT. Hardcoding 3000 is the
-// commonest reason a first deploy is marked unhealthy and killed.
 const port = process.env.PORT || 3000
-
 app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`)
+  console.log(`AlfaFocus API listening on http://localhost:${port}`)
   console.log(`CORS allows: ${allowedOrigins.join(', ')}`)
 })
