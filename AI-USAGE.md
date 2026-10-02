@@ -105,9 +105,29 @@ it in your own words.
 - **What it does and why it is built this way:**
   This file validates request data on the server before anything touches PostgreSQL. It makes sure task titles are not blank, trims whitespace, and ensures priorities are only set to allowed values (`low`, `medium`, or `high`). I wrote this as clean, native JavaScript helper functions so that we do not have to rely on an external validation library, keeping our backend lightweight, safe from invalid data, and easy to debug.
 
+- **File:** `client/src/components/ProjectBreakdown.jsx` (Dynamic Progress & Subtask Tree Traversal)
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/a08e6b6
+- **What it does and why it is built this way:**
+  I wrote the logic that calculates parent task progress based on its active child subtasks (`Math.round((completedChildren / totalChildren) * 100)`). Instead of storing a fixed percentage in state that easily goes out of sync when subtasks are added, toggled, or deleted, the progress is calculated dynamically in memory whenever tasks render. I also implemented the state toggle for expanding and collapsing subtask branches (`expandedTasks` Set) and the recursive indentation rendering so users can nest subtasks naturally.
+
+- **File:** `server/db/pool.js` (Credential Normalizer & Connection Pooler Guard)
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/16dde0f
+- **What it does and why it is built this way:**
+  I added the defensive `normalizeDatabaseUrl` helper function in the database pool configuration. Cloud database URLs (especially from Supabase poolers) often contain special characters like `#` in user passwords or quotes added by environment loaders. Since `#` is treated by standard URI parsers as a URL hash fragment, it breaks connection parsing and throws an `Invalid URL` crash. My helper safely extracts the credentials portion and percent-encodes the password (`encodeURIComponent`) before passing it to `pg.Pool`, ensuring reliable connection across both local dev and cloud deployments.
+
 ### The AI-written part I understand best
 
 - **File:** `client/src/api/index.js` (with `mockApi.js` and `httpApi.js`)
 - **Commit:** https://github.com/javieAlfaro/alfafocus/commit/ca254ca
 - **What it does and why we kept it:**
   This is the dual-mode API adapter. It looks at the environment variable `VITE_USE_MOCK_API`. If it is unset or true, it reads and writes tasks from the browser's `localStorage` with a small fake delay. If set to false, it sends real HTTP requests to our Express server. We kept this because it lets our site deploy and work immediately on GitHub Pages without needing a live backend right away, while sharing the exact same function signatures (`listTasks`, `createTask`) that our components use.
+
+- **File:** `client/src/components/HabitsHeatMap.jsx` (12-Week Focus Intensity Grid & Emerald Color Tiering)
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/a08e6b6
+- **What it does and why we kept it:**
+  This component generates an 84-day (12-week × 7 days) activity heat map similar to GitHub's contribution graph. It calculates the past 84 dates, maps logged focus minutes into 5 discrete emerald intensity tiers (`bg-zinc-800` for 0m, up to `bg-emerald-400` for 60+ mins), and lays them out in a 7-row CSS grid ordered by day of the week. I understand how it groups daily timestamps and computes streak counts using date math, and we kept it because it provides an immediate visual reward loop that encourages users to maintain daily productivity habits.
+
+- **File:** `server/tasksRepo.js` (Parameterized Relational Data Layer with Adjacency List)
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/4d31526
+- **What it does and why we kept it:**
+  This module executes all database operations against PostgreSQL using strict `$1, $2` parameterized queries to eliminate SQL injection risks. It models nested tasks using an Adjacency List pattern (`parent_task_id INT REFERENCES tasks(id)`). I understand how the relational queries join `task_lists` with `tasks` and leverage PostgreSQL foreign key cascades so that deleting a parent project or parent task cleans up all associated records without leaving orphan rows in the database.
