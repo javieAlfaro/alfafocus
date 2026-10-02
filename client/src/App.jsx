@@ -180,7 +180,7 @@ export default function App() {
               <User className="w-4 h-4 text-zinc-300" />
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-zinc-200">Javier Alfaro</p>
+              <p className="text-xs font-semibold text-zinc-200">Javie Alfaro</p>
               <p className="text-[10px] text-zinc-500">Student Account</p>
             </div>
           </div>

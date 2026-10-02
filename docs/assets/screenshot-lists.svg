@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800">
+  <rect width="1200" height="800" fill="#09090B"/>
+  
+  <!-- Left Global Sidebar -->
+  <rect x="0" y="0" width="240" height="800" fill="#09090B" stroke="#27272A" stroke-width="1"/>
+  <rect x="24" y="24" width="32" height="32" rx="8" fill="#059669"/>
+  <text x="34" y="46" font-family="system-ui, sans-serif" font-weight="bold" font-size="18" fill="#FFFFFF">A</text>
+  <text x="68" y="46" font-family="system-ui, sans-serif" font-weight="bold" font-size="18" fill="#FAFAFA">AlfaFocus</text>
+  
+  <!-- Nav items -->
+  <text x="36" y="104" font-family="system-ui, sans-serif" font-size="14" fill="#A1A1AA">? Today</text>
+  <rect x="16" y="120" width="208" height="38" rx="8" fill="#27272A" fill-opacity="0.8"/>
+  <text x="36" y="144" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#10B981">= Lists &amp; Projects</text>
+  <text x="36" y="184" font-family="system-ui, sans-serif" font-size="14" fill="#A1A1AA">?? Calendar</text>
+  <text x="36" y="224" font-family="system-ui, sans-serif" font-size="14" fill="#A1A1AA">?? Habits &amp; Stats</text>
+  
+  <!-- Lists Submenu -->
+  <text x="24" y="280" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#71717A" letter-spacing="1">PROJECT FOLDERS</text>
+  <rect x="16" y="295" width="208" height="32" rx="6" fill="#18181B"/>
+  <circle cx="34" cy="311" r="5" fill="#059669"/>
+  <text x="48" y="316" font-family="system-ui, sans-serif" font-size="13" font-weight="500" fill="#FAFAFA">AlfaFocus Redesign</text>
+  <circle cx="34" cy="343" r="5" fill="#3B82F6"/>
+  <text x="48" y="348" font-family="system-ui, sans-serif" font-size="13" fill="#A1A1AA">Marketing Q1</text>
+  <circle cx="34" cy="375" r="5" fill="#8B5CF6"/>
+  <text x="48" y="380" font-family="system-ui, sans-serif" font-size="13" fill="#A1A1AA">Personal Routines</text>
+  
+  <!-- Bottom Streak -->
+  <rect x="16" y="690" width="208" height="42" rx="8" fill="#18181B" stroke="#27272A"/>
+  <text x="30" y="716" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" fill="#10B981">?? 7 Days Streak</text>
+  
+  <!-- Main Content Area: Project Breakdown -->
+  <g transform="translate(270, 30)">
+    <!-- Header -->
+    <text x="0" y="30" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" fill="#FAFAFA">AlfaFocus Redesign</text>
+    <text x="0" y="55" font-family="system-ui, sans-serif" font-size="13" fill="#71717A">3 tasks · 2 completed · 75% overall progress</text>
+    
+    <!-- Overall Progress bar -->
+    <rect x="0" y="70" width="880" height="8" rx="4" fill="#27272A"/>
+    <rect x="0" y="70" width="660" height="8" rx="4" fill="#10B981"/>
+    
+    <!-- Quick Add Subtask/Task Bar -->
+    <rect x="0" y="95" width="880" height="46" rx="12" fill="#18181B" stroke="#27272A"/>
+    <text x="40" y="123" font-family="system-ui, sans-serif" font-size="14" fill="#71717A">+ Add task to AlfaFocus Redesign...</text>
+    
+    <!-- Parent Task 1 (Expanded with Subtasks) -->
+    <rect x="0" y="160" width="880" height="70" rx="12" fill="#18181B" stroke="#10B981" stroke-width="1.5"/>
+    <!-- Chevron Down -->
+    <text x="18" y="200" font-family="system-ui, sans-serif" font-size="14" fill="#10B981">?</text>
+    <circle cx="48" cy="195" r="10" fill="none" stroke="#71717A" stroke-width="2"/>
+    <text x="75" y="192" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#FAFAFA">Finalize AlfaFocus Design Wireframes</text>
+    <rect x="75" y="204" width="160" height="6" rx="3" fill="#27272A"/>
+    <rect x="75" y="204" width="120" height="6" rx="3" fill="#10B981"/>
+    <text x="245" y="210" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#10B981">75% (3/4 Subtasks)</text>
+    <rect x="800" y="180" width="60" height="24" rx="4" fill="#27272A"/>
+    <text x="812" y="196" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#10B981">HIGH</text>
+    
+    <!-- Nested Subtasks Tree (Indented) -->
+    <g transform="translate(48, 240)">
+      <!-- Line tree connector -->
+      <line x1="0" y1="0" x2="0" y2="180" stroke="#3F3F46" stroke-width="1.5" stroke-dasharray="3 3"/>
+      
+      <!-- Subtask 1 (Completed) -->
+      <line x1="0" y1="25" x2="20" y2="25" stroke="#3F3F46" stroke-width="1.5"/>
+      <rect x="24" y="0" width="808" height="50" rx="8" fill="#18181B" stroke="#27272A"/>
+      <circle cx="44" cy="25" r="8" fill="#059669"/>
+      <text x="40" y="29" font-family="system-ui, sans-serif" font-size="10" fill="#FFFFFF">?</text>
+      <text x="64" y="29" font-family="system-ui, sans-serif" font-size="13" text-decoration="line-through" fill="#71717A">Wireframe Page 1: Today Focus Hub</text>
+      
+      <!-- Subtask 2 (Completed) -->
+      <line x1="0" y1="85" x2="20" y2="85" stroke="#3F3F46" stroke-width="1.5"/>
+      <rect x="24" y="60" width="808" height="50" rx="8" fill="#18181B" stroke="#27272A"/>
+      <circle cx="44" cy="85" r="8" fill="#059669"/>
+      <text x="40" y="89" font-family="system-ui, sans-serif" font-size="10" fill="#FFFFFF">?</text>
+      <text x="64" y="89" font-family="system-ui, sans-serif" font-size="13" text-decoration="line-through" fill="#71717A">Wireframe Page 2: Lists &amp; Nested Trees</text>
+      
+      <!-- Subtask 3 (Completed) -->
+      <line x1="0" y1="145" x2="20" y2="145" stroke="#3F3F46" stroke-width="1.5"/>
+      <rect x="24" y="120" width="808" height="50" rx="8" fill="#18181B" stroke="#27272A"/>
+      <circle cx="44" cy="145" r="8" fill="#059669"/>
+      <text x="40" y="149" font-family="system-ui, sans-serif" font-size="10" fill="#FFFFFF">?</text>
+      <text x="64" y="149" font-family="system-ui, sans-serif" font-size="13" text-decoration="line-through" fill="#71717A">Wireframe Page 3: Calendar &amp; Day Planner</text>
+      
+      <!-- Subtask 4 (Active/Pending) -->
+      <line x1="0" y1="205" x2="20" y2="205" stroke="#3F3F46" stroke-width="1.5"/>
+      <rect x="24" y="180" width="808" height="50" rx="8" fill="#18181B" stroke="#3F3F46"/>
+      <circle cx="44" cy="205" r="8" fill="none" stroke="#71717A" stroke-width="1.5"/>
+      <text x="64" y="209" font-family="system-ui, sans-serif" font-size="13" font-weight="500" fill="#E4E4E7">Wireframe Page 4: 12-Week Heat Map &amp; Habits</text>
+    </g>
+    
+    <!-- Parent Task 2 -->
+    <rect x="0" y="490" width="880" height="65" rx="12" fill="#18181B" stroke="#27272A"/>
+    <text x="18" y="528" font-family="system-ui, sans-serif" font-size="14" fill="#71717A">?</text>
+    <circle cx="48" cy="522" r="10" fill="none" stroke="#71717A" stroke-width="2"/>
+    <text x="75" y="522" font-family="system-ui, sans-serif" font-size="15" font-weight="500" fill="#E4E4E7">Configure PostgreSQL schema &amp; endpoints</text>
+    <rect x="800" y="510" width="60" height="24" rx="4" fill="#27272A"/>
+    <text x="808" y="526" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#3B82F6">STUDY</text>
+  </g>
+</svg>

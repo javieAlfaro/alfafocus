@@ -158,25 +158,28 @@ alfafocus/
 │   │   │   ├── httpApi.js      # Fetch client sending x-app-password headers to Express
 │   │   │   └── seed.json       # Initial seed tasks for demo mode
 │   │   ├── components/
-│   │   │   ├── FocusHub.jsx    # Today & Focus Hub dashboard (Sidebar, List, Timer)
-│   │   │   └── DemoNotice.jsx  # Course demo mode indicator banner
+│   │   │   ├── FocusHub.jsx         # Today & Focus Hub dashboard (Sidebar, List, Timer)
+│   │   │   ├── ProjectBreakdown.jsx # Lists & Projects (Nested Subtask Trees, Progress)
+│   │   │   ├── CalendarPlanner.jsx  # Month Calendar Grid & Day Inspector Panel
+│   │   │   ├── HabitsHeatMap.jsx    # 12-Week Focus Heat Map & Habit Routine Bubbles
+│   │   │   └── DemoNotice.jsx       # Course demo mode indicator banner
 │   │   ├── hooks/
 │   │   │   └── useTimer.js     # Self-authored drift-free countdown & stopwatch hook
-│   │   ├── App.jsx             # Main application container
+│   │   ├── App.jsx             # Main application container & persistent navigation shell
 │   │   └── styles.css          # Tailwind CSS layer directives & base styles
 │   ├── tailwind.config.js      # Custom design tokens (Zinc 950 bg, Emerald 500 accent)
 │   └── postcss.config.js       # PostCSS plugins for Tailwind
 ├── server/                     # Backend REST API (Node.js & Express)
 │   ├── db/
-│   │   ├── pool.js             # PostgreSQL connection pool using 'pg'
+│   │   ├── pool.js             # PostgreSQL connection pool with defensive URL normalizer
 │   │   ├── schema.sql          # Relational tables: users, task_lists, tasks, focus_sessions
 │   │   └── seed.sql            # Realistic sample seed records
 │   ├── utils/
 │   │   └── validators.js       # Self-authored server input sanitization & validation
-│   ├── tasksRepo.js            # Parameterized database queries ($1, $2)
+│   ├── tasksRepo.js            # Parameterized database queries ($1, $2) supporting hierarchy
 │   └── server.js               # Express application, routes, access gate, and error handler
 ├── docs/                       # Course planning documents & assets
-│   └── assets/                 # Screenshots and application mockups
+│   └── assets/                 # Screenshots and application mockups (SVGs)
 ├── AI-USAGE.md                 # Detailed AI assistance record, commit links, and badge proof
 ├── REPORT.md                   # Weekly progress increment report
 └── README.md                   # Primary documentation (this file)
@@ -186,33 +189,44 @@ alfafocus/
 
 ## 6. Screenshots
 
+### Figure 1: Today & Focus Hub View
 ![AlfaFocus Today and Focus Hub Dashboard](docs/assets/screenshot.svg)
-*Figure 1: AlfaFocus Today & Focus Hub in Dark Mode featuring sidebar navigation, streak stats, quick-add task checklist, and active circular Pomodoro timer.*
+*Featuring persistent sidebar navigation, streak stats, quick-add task checklist, and active circular Pomodoro timer.*
+
+### Figure 2: Lists & Multi-Tier Subtask Trees
+![AlfaFocus Lists and Nested Subtasks](docs/assets/screenshot-lists.svg)
+*Featuring custom project folders (`AlfaFocus Redesign`, `Marketing Q1`), collapsible subtask trees, and dynamic parent progress calculation.*
+
+### Figure 3: Calendar & Day Planner View
+![AlfaFocus Calendar and Planner](docs/assets/screenshot-calendar.svg)
+*Featuring interactive October 2026 month grid, scheduled focus block chips, today highlight, and right-hand daily agenda inspector.*
+
+### Figure 4: Habits Tracker & 12-Week Focus Heat Map
+![AlfaFocus Habits and Heat Map](docs/assets/screenshot-habits.svg)
+*Featuring 4 productivity stat cards (Streak, Focus Time, Completed Tasks, Efficiency), 84-day (12-week) GitHub-style emerald heat map, and weekly habit routine tracker.*
 
 ---
 
 ## 7. Known issues and next steps
 
-### Current Status (Week 1 Increment)
-* The **Today & Focus Hub** screen is fully interactive in **Demo Mode**, supporting task creation, completion toggles, deletion, and active task locking.
-* The self-authored **`useTimer` hook** provides drift-free Pomodoro, Deep Work, and Stopwatch tracking with audio chime completion.
-* The Express server, database schema, and parameterized database queries are fully scaffolded and verified locally.
+### Current Status (Week 2 Increment Complete)
+* **Full 4-Screen Loop Delivered:** Users can seamlessly navigate between Today Focus Hub, Lists & Nested Projects, Calendar Planner, and Habits & Heat Map without page reloads.
+* **Hierarchical Subtask Trees:** Parent tasks dynamically aggregate completion percentages from child subtasks (`Math.round((completed / total) * 100)`), with collapsible chevron toggles and cascading database deletion (`ON DELETE CASCADE`).
+* **12-Week Focus Intensity Grid:** An 84-day GitHub-style heat map visualizing daily focus duration in 5 emerald color tiers, accompanied by live productivity stats and weekly habit bubbles.
+* **Month Calendar Grid:** Interactive October 2026 grid with scheduled focus blocks and a detailed date inspector panel for deep planning.
+* **Live Supabase PostgreSQL Database:** Successfully provisioned Supabase PostgreSQL via an IPv4 session pooler with parameterized queries, schema migrations, and seed data.
+* **Security & Auditing:** Completed and verified all 31 checks in [`SECURITY-CHECKLIST.md`](../project/SECURITY-CHECKLIST.md) (git secret scans, CORS named origins, input sanitization, app-level password gate).
 
-### Known Limitations
-* **Subtask Tree Nesting:** While the PostgreSQL schema includes `parent_task_id` for recursive tasks, the client currently displays top-level daily tasks. Recursive multi-level rendering will be completed in Week 2.
-* **Activity Heat Map:** Focus sessions are currently logged in memory/database, but the visual GitHub-style intensity heat map component is scheduled for Week 2.
-* **Calendar View:** The interactive Month/Week calendar scheduler is planned for Week 3.
-
-### Next Steps for Week 2
-1. Implement recursive multi-tier subtask rendering in the Lists & Projects view.
-2. Build the visual GitHub-style activity heat map component populated from completed focus sessions.
-3. Deploy the PostgreSQL database to Supabase and connect the live Express API.
-4. Complete and submit `SECURITY-CHECKLIST.md`.
+### Next Steps for Week 3 (Final Increment & Presentation)
+1. Deploy the Express REST API server to **Render** with production environment variables (`DATABASE_URL`, `APP_PASSWORD`, `CORS_ORIGINS`).
+2. Point the production client on GitHub Pages to the live Render API (`VITE_USE_MOCK_API=false`).
+3. Record the 3–5 minute final walkthrough presentation video demonstrating core workflows, responsive UI, database persistence, and security controls.
+4. Prepare the final slide deck and generate the required 1080x1080 promo square graphic for course submission.
 
 ---
 
 ## Author & License
 
-* **Author:** Javier Alfaro (BSCS - 4th Year, 6APSI)
+* **Author:** Javie Alfaro (BSCS - 4th Year, 6APSI)
 * **Course:** HAU 6APSI - Web Application Development
 * **License:** MIT, see [LICENSE](LICENSE)
