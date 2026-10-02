@@ -1,179 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
-  Flame, CheckCircle2, Circle, Play, Pause, RotateCcw, 
-  Plus, Calendar, CheckSquare, BarChart2, Trash2, User, Clock, AlertCircle
+  CheckCircle2, Circle, Play, Pause, RotateCcw, 
+  Plus, Trash2, Clock, AlertCircle
 } from 'lucide-react';
 import { useTimer } from '../hooks/useTimer';
-import { listTasks, createTask, updateTask, deleteTask, recordFocusSession, USING_MOCK_API } from '../api';
+import { USING_MOCK_API } from '../api';
 import DemoNotice from './DemoNotice';
 
-export default function FocusHub() {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export default function FocusHub({ 
+  tasks = [], 
+  loading = false, 
+  error = null, 
+  onToggleTask, 
+  onAddTask, 
+  onDeleteTask, 
+  onLogSession 
+}) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('WORK');
-  const [activeTask, setActiveTask] = useState(null);
+  const [activeTaskId, setActiveTaskId] = useState(null);
   const [sessionNotice, setSessionNotice] = useState(null);
 
-  // Load tasks on mount
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Active task fallback
+  const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0] || null;
 
-  async function loadData() {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listTasks();
-      setTasks(data);
-      if (data.length > 0) {
-        setActiveTask(data[0]);
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to load tasks');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Timer completion handler
-  const handleTimerComplete = async (duration) => {
-    try {
-      await recordFocusSession({
-        taskId: activeTask ? activeTask.id : null,
-        taskTitle: activeTask ? activeTask.title : 'General Focus',
-        duration_minutes: Math.max(1, Math.round(duration / 60)),
+  // Timer completion callback
+  const handleTimerComplete = (duration) => {
+    const minutes = Math.max(1, Math.round(duration / 60));
+    if (onLogSession) {
+      onLogSession({
+        task_id: activeTask ? activeTask.id : null,
+        task_title: activeTask ? activeTask.title : 'General Focus',
+        duration_minutes: minutes,
         mode,
       });
-      setSessionNotice(`Focus session completed! Logged ${Math.round(duration / 60)}m to your activity record.`);
-      setTimeout(() => setSessionNotice(null), 6000);
-    } catch (err) {
-      console.error('Failed to log session:', err);
     }
+    setSessionNotice(`Focus session completed! Logged ${minutes}m to your activity record.`);
+    setTimeout(() => setSessionNotice(null), 6000);
   };
 
   const { formattedTime, isRunning, mode, start, pause, reset, switchMode } = useTimer(handleTimerComplete);
 
-  const handleToggleTask = async (task) => {
-    const nextStatus = !task.completed;
-    // Optimistic UI update
-    setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: nextStatus } : t));
-    try {
-      await updateTask(task.id, { completed: nextStatus });
-    } catch (err) {
-      // Revert on error
-      setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: task.completed } : t));
-      setError('Failed to update task');
-    }
-  };
-
-  const handleAddTask = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-
-    const optimisticId = 'temp-' + Date.now();
-    const tempTask = {
-      id: optimisticId,
+    onAddTask({
       title: newTaskTitle.trim(),
       category: newTaskCategory,
       priority: 'high',
-      progress: 0,
-      completed: false,
-    };
-
-    setTasks([tempTask, ...tasks]);
+    });
     setNewTaskTitle('');
-
-    try {
-      const created = await createTask({
-        title: tempTask.title,
-        category: tempTask.category,
-        priority: tempTask.priority,
-      });
-      setTasks(prev => prev.map(t => t.id === optimisticId ? created : t));
-      if (!activeTask) setActiveTask(created);
-    } catch (err) {
-      setTasks(prev => prev.filter(t => t.id !== optimisticId));
-      setError('Failed to create task');
-    }
-  };
-
-  const handleDeleteTask = async (e, id) => {
-    e.stopPropagation();
-    const previous = tasks;
-    setTasks(tasks.filter(t => t.id !== id));
-    if (activeTask?.id === id) {
-      setActiveTask(tasks.find(t => t.id !== id) || null);
-    }
-    try {
-      await deleteTask(id);
-    } catch (err) {
-      setTasks(previous);
-      setError('Failed to delete task');
-    }
   };
 
   const completedCount = tasks.filter(t => t.completed).length;
 
   return (
-    <div className="flex h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased overflow-hidden">
+    <div className="flex-1 flex overflow-hidden bg-[#09090B] text-[#FAFAFA]">
       
-      {/* 1. Left Sidebar Navigation */}
-      <aside className="w-64 border-r border-zinc-800 bg-[#09090B] flex flex-col justify-between p-4">
-        <div>
-          {/* Logo */}
-          <div className="flex items-center gap-3 px-3 py-4 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/40">
-              A
-            </div>
-            <span className="text-xl font-bold tracking-tight">AlfaFocus</span>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-800/80 text-emerald-400 font-medium text-sm">
-              <CheckSquare className="w-4 h-4" /> Today
-            </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 font-medium text-sm transition">
-              <CheckSquare className="w-4 h-4" /> Lists & Projects
-            </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 font-medium text-sm transition">
-              <Calendar className="w-4 h-4" /> Calendar
-            </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 font-medium text-sm transition">
-              <BarChart2 className="w-4 h-4" /> Habits & Stats
-            </button>
-          </nav>
-        </div>
-
-        {/* Bottom User & Streak Profile */}
-        <div className="pt-4 border-t border-zinc-800 space-y-3">
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#18181B] border border-zinc-800">
-            <div className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-emerald-400 animate-pulse" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Streak</span>
-            </div>
-            <span className="text-sm font-bold text-emerald-400">7 Days</span>
-          </div>
-
-          <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs">
-              <User className="w-4 h-4 text-zinc-300" />
-            </div>
-            <div className="truncate">
-              <p className="text-xs font-semibold text-zinc-200">Javier Alfaro</p>
-              <p className="text-[10px] text-zinc-500">Student Account</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* 2. Main Today's Checklist Area */}
+      {/* 1. Main Today's Checklist Area */}
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-6 flex justify-between items-baseline">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Today's Focus</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Today's Focus</h1>
             <p className="text-sm text-zinc-400 mt-1">October 02, 2026</p>
           </div>
           {USING_MOCK_API && (
@@ -183,7 +71,7 @@ export default function FocusHub() {
           )}
         </header>
 
-        {/* Course Demo Notice component */}
+        {/* Demo Notice */}
         <div className="mb-6">
           <DemoNotice />
         </div>
@@ -203,12 +91,11 @@ export default function FocusHub() {
               <AlertCircle className="w-4 h-4 text-red-400" />
               <span>{error}</span>
             </div>
-            <button onClick={loadData} className="text-xs font-semibold underline hover:text-white">Retry</button>
           </div>
         )}
 
         {/* Quick Add Form */}
-        <form onSubmit={handleAddTask} className="mb-6 flex gap-2">
+        <form onSubmit={handleSubmit} className="mb-6 flex gap-2">
           <div className="relative flex-1">
             <Plus className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input 
@@ -216,7 +103,7 @@ export default function FocusHub() {
               placeholder="Add a new task..."
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-[#18181B] border border-zinc-800 rounded-xl text-sm placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition"
+              className="w-full pl-12 pr-4 py-3 bg-[#18181B] border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition"
             />
           </div>
           <select 
@@ -254,7 +141,7 @@ export default function FocusHub() {
               {tasks.map((task) => (
                 <div 
                   key={task.id}
-                  onClick={() => setActiveTask(task)}
+                  onClick={() => setActiveTaskId(task.id)}
                   className={`flex items-center justify-between p-4 rounded-xl border transition cursor-pointer ${
                     activeTask?.id === task.id 
                       ? 'bg-zinc-800/60 border-emerald-500/50' 
@@ -264,7 +151,7 @@ export default function FocusHub() {
                   <div className="flex items-center gap-3.5 flex-1 mr-4">
                     <button 
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); handleToggleTask(task); }}
+                      onClick={(e) => { e.stopPropagation(); onToggleTask(task); }}
                       className="text-zinc-400 hover:text-emerald-400 transition"
                       aria-label="Toggle task completion"
                     >
@@ -287,7 +174,7 @@ export default function FocusHub() {
                       {task.category || 'WORK'}
                     </span>
                     <button
-                      onClick={(e) => handleDeleteTask(e, task.id)}
+                      onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); }}
                       className="text-zinc-500 hover:text-red-400 p-1 rounded transition opacity-60 hover:opacity-100"
                       title="Delete task"
                     >
@@ -301,7 +188,7 @@ export default function FocusHub() {
         </div>
       </main>
 
-      {/* 3. Right Panel: Active Focus & Circular Timer */}
+      {/* 2. Right Panel: Active Focus & Circular Timer */}
       <aside className="w-96 border-l border-zinc-800 bg-[#09090B] p-6 flex flex-col justify-between">
         <div className="space-y-6">
           

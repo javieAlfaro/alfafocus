@@ -28,6 +28,17 @@ async function request(path, options = {}) {
   return response.json()
 }
 
+export function listLists() {
+  return request('/api/lists')
+}
+
+export function createList(input) {
+  return request('/api/lists', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export function listTasks() {
   return request('/api/tasks')
 }
@@ -50,6 +61,10 @@ export function deleteTask(id) {
   return request(`/api/tasks/${id}`, {
     method: 'DELETE',
   })
+}
+
+export function listFocusSessions() {
+  return request('/api/focus/sessions')
 }
 
 export function recordFocusSession(session) {

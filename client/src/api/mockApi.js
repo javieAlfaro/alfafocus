@@ -3,20 +3,41 @@ import seed from './seed.json'
 
 const TASKS_KEY = 'alfafocus:tasks'
 const SESSIONS_KEY = 'alfafocus:focus_sessions'
+const LISTS_KEY = 'alfafocus:lists'
 
-const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms))
+const delay = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function readLists() {
+  const stored = localStorage.getItem(LISTS_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      localStorage.removeItem(LISTS_KEY)
+    }
+  }
+  const defaultLists = seed.lists || [
+    { id: 1, title: 'AlfaFocus Redesign', color: '#059669' },
+    { id: 2, title: 'Marketing Q1', color: '#3B82F6' },
+    { id: 3, title: 'Personal Routines', color: '#8B5CF6' }
+  ]
+  localStorage.setItem(LISTS_KEY, JSON.stringify(defaultLists))
+  return defaultLists
+}
 
 function readTasks() {
   const stored = localStorage.getItem(TASKS_KEY)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) return parsed
     } catch {
       localStorage.removeItem(TASKS_KEY)
     }
   }
-  localStorage.setItem(TASKS_KEY, JSON.stringify(seed))
-  return seed
+  const defaultTasks = seed.tasks || (Array.isArray(seed) ? seed : [])
+  localStorage.setItem(TASKS_KEY, JSON.stringify(defaultTasks))
+  return defaultTasks
 }
 
 function writeTasks(rows) {
@@ -24,9 +45,27 @@ function writeTasks(rows) {
   return rows
 }
 
+export async function listLists() {
+  await delay()
+  return readLists()
+}
+
+export async function createList(input) {
+  await delay()
+  const lists = readLists()
+  const newList = {
+    id: Date.now(),
+    title: input.title,
+    color: input.color || '#059669',
+  }
+  const updated = [...lists, newList]
+  localStorage.setItem(LISTS_KEY, JSON.stringify(updated))
+  return newList
+}
+
 export async function listTasks() {
   await delay()
-  return readTasks().slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  return readTasks().slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
 }
 
 export async function createTask(input) {
@@ -54,12 +93,29 @@ export async function updateTask(id, input) {
 
 export async function deleteTask(id) {
   await delay()
-  writeTasks(readTasks().filter((row) => String(row.id) !== String(id)))
+  // Cascade delete: delete the task and any of its child subtasks
+  const remaining = readTasks().filter((row) => String(row.id) !== String(id) && String(row.parent_task_id) !== String(id))
+  writeTasks(remaining)
+}
+
+export async function listFocusSessions() {
+  await delay()
+  const stored = localStorage.getItem(SESSIONS_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      localStorage.removeItem(SESSIONS_KEY)
+    }
+  }
+  const defaultSessions = seed.sessions || []
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(defaultSessions))
+  return defaultSessions
 }
 
 export async function recordFocusSession(session) {
   await delay()
-  const existing = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]')
+  const existing = await listFocusSessions()
   const newSession = {
     id: 'session-' + crypto.randomUUID().slice(0, 8),
     ...session,
