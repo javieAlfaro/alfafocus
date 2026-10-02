@@ -46,7 +46,29 @@ app.use('/api', (request, response, next) => {
   next()
 })
 
-// 4. Task Endpoints
+// 4. List Endpoints
+app.get('/api/lists', async (request, response, next) => {
+  try {
+    const lists = await tasksRepo.getAllLists(pool)
+    response.json(lists)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/lists', async (request, response, next) => {
+  const title = typeof request.body?.title === 'string' ? request.body.title.trim() : ''
+  if (!title) return response.status(400).json({ error: 'List title is required' })
+
+  try {
+    const created = await tasksRepo.createList(pool, { title, color: request.body?.color })
+    response.status(201).json(created)
+  } catch (error) {
+    next(error)
+  }
+})
+
+// 5. Task Endpoints
 app.get('/api/tasks', async (request, response, next) => {
   try {
     const tasks = await tasksRepo.getAllTasks(pool)
