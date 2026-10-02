@@ -17,12 +17,38 @@ if (!process.env.DATABASE_URL) {
 // verifying who is on the other end. That is the standard tradeoff for a
 // student project. If your host publishes a CA certificate, pass it as
 // ssl: { ca: readFileSync('ca.pem') } instead and say so in your journal.
+function normalizeDatabaseUrl(raw) {
+  if (!raw) return raw
+  let url = raw.trim()
+  if (url.startsWith('"') && url.endsWith('"')) {
+    url = url.slice(1, -1)
+  }
+  try {
+    new URL(url)
+    return url
+  } catch {
+    const protoIdx = url.indexOf('://')
+    const atIdx = url.lastIndexOf('@')
+    if (protoIdx !== -1 && atIdx !== -1) {
+      const userInfo = url.slice(protoIdx + 3, atIdx)
+      const colonIdx = userInfo.indexOf(':')
+      if (colonIdx !== -1) {
+        const user = userInfo.slice(0, colonIdx)
+        const pass = userInfo.slice(colonIdx + 1)
+        return `${url.slice(0, protoIdx + 3)}${user}:${encodeURIComponent(decodeURIComponent(pass))}${url.slice(atIdx)}`
+      }
+    }
+    return url
+  }
+}
+
+const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL)
 const isLocal =
-  process.env.DATABASE_URL.includes('localhost') ||
-  process.env.DATABASE_URL.includes('127.0.0.1')
+  connectionString.includes('localhost') ||
+  connectionString.includes('127.0.0.1')
 
 export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl: isLocal ? false : { rejectUnauthorized: false },
   max: 5,                          // free tiers allow far fewer than you think
   idleTimeoutMillis: 10_000,       // hand connections back quickly
