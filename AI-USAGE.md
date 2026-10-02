@@ -27,21 +27,21 @@ At least six entries. One per real use. Every entry needs a commit link.
 - **What I kept, what I changed, and why:** Kept the component structure and colors. Adjusted the spacing, buttons, and card borders to follow the 8px grid spacing from our design system.
 - **Commit:** https://github.com/javieAlfaro/alfafocus/commit/ca254ca
 
-### YYYY-MM-DD - (Week 2 entry)
+### 2026-09-28 - Hierarchical subtask trees and project breakdown
 
-- **Tool:**
-- **What I asked for:**
-- **What it gave back:**
-- **What I kept, what I changed, and why:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Help build the Project Breakdown screen where tasks belong to custom project lists, can be broken down into child subtasks, and display dynamic progress bars.
+- **What it gave back:** The `ProjectBreakdown.jsx` component with expandable subtask trees, custom list folders, and dynamic progress calculation.
+- **What I kept, what I changed, and why:** Kept the collapsible tree interface and list sidebar. Adjusted the progress formula so that parent tasks calculate their progress dynamically from active child subtasks instead of storing redundant percentages.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/a08e6b6
 
-### YYYY-MM-DD - (Week 2 entry)
+### 2026-09-29 - Activity heat map and multi-view navigation
 
-- **Tool:**
-- **What I asked for:**
-- **What it gave back:**
-- **What I kept, what I changed, and why:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Build the 12-week GitHub-style activity heat map and create the persistent navigation shell in `App.jsx` to switch between all 4 application screens.
+- **What it gave back:** `HabitsHeatMap.jsx` with 5-tier color intensity mapping, stat cards, and the master shell in `App.jsx`.
+- **What I kept, what I changed, and why:** Kept the heat map tile grid and navigation architecture. Added date tooltip labels and an interactive daily habit routine checklist directly below the grid.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/a08e6b6
 
 ### YYYY-MM-DD - (Week 3 entry)
 
@@ -71,12 +71,12 @@ scores zero.
 - **What I did instead:** Instead of subtracting 1 second on every tick, I recalculated the time by checking the real clock. When the timer starts, it calculates the target end timestamp (`Date.now() + duration`). Then it runs a quick 250ms check that calculates `(targetTime - Date.now())`. Even if the browser pauses the tab, it immediately snaps back to the exact correct second when you look at it.
 - **Commit:** https://github.com/javieAlfaro/alfafocus/commit/9c3f451
 
-### Case 2 - (Week 2 case)
+### Case 2 - Foreign key constraint crash on nested subtask deletion
 
-- **What it gave me:**
-- **What was wrong with it:**
-- **What I did instead:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **What it gave me:** A straightforward SQL deletion query for removing tasks: `DELETE FROM tasks WHERE id = $1`.
+- **What was wrong with it:** When deleting a parent task that had nested subtasks attached, PostgreSQL crashed with a foreign key violation (`violates foreign key constraint "tasks_parent_task_id_fkey"`), returning a 500 server error and breaking the UI because child subtasks still pointed to the deleted ID.
+- **What I did instead:** I modified the relational schema to enforce `ON DELETE CASCADE` on `parent_task_id`, so deleting a parent task automatically deletes all of its nested subtasks in a single safe query. I also mirrored this logic in our client `mockApi.js` so child tasks are cleaned up cleanly in demo mode too.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/4d31526
 
 ### Case 3 - (Week 3 case)
 
