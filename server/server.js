@@ -32,18 +32,44 @@ app.get('/readyz', async (request, response) => {
   }
 })
 
-// 3. App Password Gate Middleware (Checklist #18-22: Access Layer)
+// 3. HTTP Basic Authentication & App Gate Middleware (Course Section 2, Option B)
+// Enforces standard HTTP Basic Auth so browsers prompt for username/password,
+// while also supporting the x-app-password header for client requests.
+const APP_USER = process.env.APP_USER || 'alfa'
 const APP_PASSWORD = process.env.APP_PASSWORD || 'alfa2026'
 
 app.use('/api', (request, response, next) => {
-  // Allow OPTIONS preflight requests
+  // Allow OPTIONS preflight requests for CORS
   if (request.method === 'OPTIONS') return next()
-  
-  const providedPassword = request.headers['x-app-password']
-  if (providedPassword !== APP_PASSWORD) {
-    return response.status(401).json({ error: 'Unauthorized: valid access PIN or password required.' })
+
+  const authHeader = request.headers['authorization'] || ''
+  const legacyPassword = request.headers['x-app-password']
+
+  // 1. Check HTTP Basic Authentication: "Basic <base64(user:pass)>"
+  if (authHeader.startsWith('Basic ')) {
+    try {
+      const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8')
+      const colonIndex = credentials.indexOf(':')
+      if (colonIndex !== -1) {
+        const user = credentials.slice(0, colonIndex)
+        const pass = credentials.slice(colonIndex + 1)
+        if (user === APP_USER && pass === APP_PASSWORD) {
+          return next()
+        }
+      }
+    } catch {
+      // Malformed header, proceed to 401
+    }
   }
-  next()
+
+  // 2. Check x-app-password header for seamless React client compatibility
+  if (legacyPassword === APP_PASSWORD) {
+    return next()
+  }
+
+  // 3. Unauthorized: send WWW-Authenticate header to trigger native browser login modal
+  response.setHeader('WWW-Authenticate', 'Basic realm="AlfaFocus Secure API"')
+  return response.status(401).json({ error: 'Unauthorized: valid access credentials required.' })
 })
 
 // 4. List Endpoints

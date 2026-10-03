@@ -19,6 +19,7 @@
   - Added a right-hand date inspector showing scheduled focus sessions and daily tasks for any clicked date.
 - Extended the **Express REST API** with `/api/lists` endpoints and updated `tasksRepo.js` with parameterized queries supporting `list_id` and recursive `parent_task_id`.
 - Successfully provisioned and connected **Supabase PostgreSQL** via IPv4 Session Pooler, executing `schema.sql` and `seed.sql` for all relational models.
+- Implemented **HTTP Basic Authentication Door** in `server/server.js` with `WWW-Authenticate` browser challenge and environment variables (`APP_USER`, `APP_PASSWORD`), satisfying course lockdown requirements before going public.
 - Completed **`SECURITY-CHECKLIST.md`** containing 31 audited security checks with verifiable evidence.
 - Updated `AI-USAGE.md` with Week 2 entries (Entries 3 & 4) and documented Case 2 (subtask foreign key cascade bug).
 

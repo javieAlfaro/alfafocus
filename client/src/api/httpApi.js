@@ -1,9 +1,14 @@
 const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+const appUser = import.meta.env.VITE_APP_USER || 'alfa'
 const appPassword = import.meta.env.VITE_APP_PASSWORD || 'alfa2026'
+
+// Base64 encode for standard HTTP Basic Authentication
+const basicAuthHeader = typeof btoa === 'function' ? `Basic ${btoa(`${appUser}:${appPassword}`)}` : ''
 
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
+    ...(basicAuthHeader ? { 'Authorization': basicAuthHeader } : {}),
     'x-app-password': appPassword,
     ...(options.headers || {}),
   }
