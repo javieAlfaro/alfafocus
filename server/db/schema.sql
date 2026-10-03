@@ -49,4 +49,6 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
 -- Indexes for performance and quick lookups
 CREATE INDEX IF NOT EXISTS tasks_created_at_idx ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS tasks_parent_idx ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS tasks_list_idx ON tasks(list_id);
+CREATE INDEX IF NOT EXISTS tasks_due_date_idx ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS focus_sessions_completed_at_idx ON focus_sessions(completed_at DESC);
