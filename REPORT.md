@@ -1,5 +1,49 @@
 # Weekly Increment Reports
 
+## Week 3 — Week of: October 4, 2026
+
+### What changed this week
+
+- Implemented **Interactive Calendar & Schedule Planner** (`client/src/components/CalendarPlanner.jsx`):
+  - Dynamic task mapping displaying scheduled items on corresponding calendar cells by `due_date`.
+  - View switcher supporting full 31-day **Month Grid** and 7-day **Week View**.
+  - Functional Month Navigation controls with Previous/Next controls and quick "Today" snap.
+  - Interactive **Date Inspector Panel** allowing users to review tasks, focus session logs, and schedule new items directly for any clicked date.
+- Implemented **Web Audio API Chime Synthesizer & Browser Notifications Engine** (`client/src/utils/audioAlerts.js`):
+  - Built-in oscillator tone synthesizer producing Harmonic Bell (587Hz), Deep Gong (220Hz), and Digital Beep tones without external MP3 CDN dependencies, guaranteeing offline reliability.
+  - Browser Web Notifications API integration that alerts users when timers finish even if they are working in another tab or have the browser minimized.
+- Built **Settings & Audio Preferences Modal** (`client/src/components/SettingsModal.jsx`):
+  - Allows users to audition alert chimes, adjust master chime volume (0–100%), request notification permissions, and view API connection status.
+- Enhanced **Habits & Dynamic Analytics** (`client/src/components/HabitsHeatMap.jsx`):
+  - Dynamically calculates total focus hours, completion rates, and streak consistency from application state.
+  - Added visual **Category Time Allocation Breakdown** across Work, Study, Personal, and Health.
+  - Integrated **Productivity Report CSV Export** that generates downloadable session audit files for instructor grading and personal tracking.
+- Added **Project List Creation & Feedback Polish** (`client/src/components/ProjectBreakdown.jsx` & `client/src/App.jsx`):
+  - Added inline project folder creation with custom colors.
+  - Created a global floating **Toast Feedback System** for responsive action feedback.
+  - Added empty state prompts across checklists and calendar inspector panels.
+- Optimized database indexing in PostgreSQL schema (`server/db/schema.sql`) for `list_id` and `due_date`.
+- Completed **`AI-USAGE.md`** audit trail with 6 entries, 3 failure cases, and detailed authorship analysis.
+
+### Why
+
+- To complete the proposed feature loop of AlfaFocus, elevating it from a focus timer to a complete scheduling and habit management workstation.
+- To eliminate external CDN audio dependencies through synthesized Web Audio, ensuring 100% offline and standalone reliability.
+- To fulfill all criteria for the *Builds Full-Stack JavaScript and AI* course badge.
+
+### What broke or what I got stuck on
+
+- **Web Audio Context Autoplay Suspension:** Modern browsers suspend `AudioContext` instances created before user interaction. We resolved this by resuming or initializing the shared context upon the first user interaction (such as starting a timer or auditioning a chime).
+- **Date Timezone Boundary Shifting:** When parsing date strings (`YYYY-MM-DD`) with naive `new Date()`, UTC conversion can shift the calendar date by one day in local timezones. We resolved this by parsing ISO segments explicitly and pinning them to local midnight (`T00:00:00`).
+
+### What is left
+
+- Recording the 3–5 minute walkthrough video presentation (with the required 2–3 min AI discussion).
+- Finalizing the 5-slide presentation deck.
+- Generating the 1080x1080 promotional square graphic asset.
+
+---
+
 ## Week 2 — Week of: September 27, 2026
 
 ### What changed this week
