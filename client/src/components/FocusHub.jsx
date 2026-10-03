@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   CheckCircle2, Circle, Play, Pause, RotateCcw, 
-  Plus, Trash2, Clock, AlertCircle
+  Plus, Trash2, Clock, AlertCircle, Settings 
 } from 'lucide-react';
 import { useTimer } from '../hooks/useTimer';
 import { USING_MOCK_API } from '../api';
@@ -14,7 +14,9 @@ export default function FocusHub({
   onToggleTask, 
   onAddTask, 
   onDeleteTask, 
-  onLogSession 
+  onLogSession,
+  onOpenSettings,
+  onShowToast
 }) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('WORK');
@@ -50,6 +52,7 @@ export default function FocusHub({
       priority: 'high',
     });
     setNewTaskTitle('');
+    if (onShowToast) onShowToast('Task added to Today', 'success');
   };
 
   const completedCount = tasks.filter(t => t.completed).length;
@@ -59,16 +62,28 @@ export default function FocusHub({
       
       {/* 1. Main Today's Checklist Area */}
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="mb-6 flex justify-between items-baseline">
+        <header className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Today's Focus</h1>
-            <p className="text-sm text-zinc-400 mt-1">October 02, 2026</p>
+            <p className="text-sm text-zinc-400 mt-1">Saturday, October 3, 2026</p>
           </div>
-          {USING_MOCK_API && (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-              Demo Mode Active
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {USING_MOCK_API && (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                Demo Mode Active
+              </span>
+            )}
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-2 rounded-xl bg-[#18181B] hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition"
+                title="Settings & Audio Preferences"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Demo Notice */}

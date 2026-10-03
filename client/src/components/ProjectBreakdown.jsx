@@ -4,11 +4,21 @@ import {
   Plus, MoreVertical, Trash2, Clock, CheckSquare
 } from 'lucide-react';
 
-export default function ProjectBreakdown({ tasks, lists, onToggleTask, onAddTask, onDeleteTask }) {
+export default function ProjectBreakdown({ 
+  tasks = [], 
+  lists = [], 
+  onToggleTask, 
+  onAddTask, 
+  onDeleteTask,
+  onCreateList,
+  onShowToast
+}) {
   const [selectedListId, setSelectedListId] = useState(lists[0]?.id || 1);
   const [expandedTasks, setExpandedTasks] = useState({ 1: true, 2: true });
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [addingSubtaskForId, setAddingSubtaskForId] = useState(null);
+  const [isCreatingList, setIsCreatingList] = useState(false);
+  const [newListName, setNewListName] = useState('');
 
   const activeList = lists.find(l => l.id === selectedListId) || lists[0];
   const listTasks = tasks.filter(t => t.list_id === selectedListId || (!t.list_id && selectedListId === 1));
@@ -47,10 +57,54 @@ export default function ProjectBreakdown({ tasks, lists, onToggleTask, onAddTask
         <div>
           <div className="flex items-center justify-between mb-4 px-2">
             <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Project Lists</span>
-            <button className="text-zinc-400 hover:text-emerald-400 transition" title="New List">
+            <button 
+              onClick={() => setIsCreatingList(!isCreatingList)}
+              className="text-zinc-400 hover:text-emerald-400 transition" 
+              title="New List"
+            >
               <FolderPlus className="w-4 h-4" />
             </button>
           </div>
+
+          {/* New List Inline Form */}
+          {isCreatingList && (
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newListName.trim()) return;
+                if (onCreateList) {
+                  onCreateList({ title: newListName.trim(), color: '#10B981' });
+                }
+                setNewListName('');
+                setIsCreatingList(false);
+              }}
+              className="mb-3 p-2 rounded-lg bg-zinc-900 border border-zinc-700 space-y-2"
+            >
+              <input
+                type="text"
+                placeholder="List name..."
+                value={newListName}
+                onChange={(e) => setNewListName(e.target.value)}
+                autoFocus
+                className="w-full px-2 py-1 bg-[#18181B] border border-zinc-700 rounded text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+              />
+              <div className="flex gap-1 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingList(false)}
+                  className="px-2 py-0.5 text-[11px] text-zinc-400 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[11px] font-semibold hover:bg-emerald-500"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="space-y-1">
             {lists.map((list) => {

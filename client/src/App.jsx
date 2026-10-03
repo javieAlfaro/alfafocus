@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User 
+  CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User, 
+  Settings, CheckCircle, AlertCircle, Info, X 
 } from 'lucide-react';
 import FocusHub from './components/FocusHub';
 import ProjectBreakdown from './components/ProjectBreakdown';
 import HabitsHeatMap from './components/HabitsHeatMap';
 import CalendarPlanner from './components/CalendarPlanner';
+import SettingsModal from './components/SettingsModal';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
-  listLists, listFocusSessions, recordFocusSession 
+  listLists, createList, listFocusSessions, recordFocusSession 
 } from './api';
 
 export default function App() {
@@ -18,6 +20,19 @@ export default function App() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Settings modal state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Toast notification state
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type, id: Date.now() });
+    setTimeout(() => {
+      setToast(prev => (prev?.message === message ? null : prev));
+    }, 3500);
+  };
 
   // Load shared data on mount
   useEffect(() => {
@@ -48,10 +63,11 @@ export default function App() {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: nextStatus } : t));
     try {
       await updateTask(task.id, { completed: nextStatus });
+      showToast(nextStatus ? 'Task completed! Keep the momentum.' : 'Task marked active', 'info');
     } catch {
       // Revert on error
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: task.completed } : t));
-      setError('Failed to update task');
+      showToast('Failed to update task', 'error');
     }
   };
 
@@ -63,7 +79,8 @@ export default function App() {
       title: newTaskData.title,
       category: newTaskData.category || 'WORK',
       priority: newTaskData.priority || 'medium',
-      list_id: newTaskData.list_id || 1,
+      due_date: newTaskData.due_date || null,
+      list_id: newTaskData.list_id || (lists[0]?.id || 1),
       parent_task_id: newTaskData.parent_task_id || null,
       progress: 0,
       completed: false,
@@ -75,9 +92,10 @@ export default function App() {
     try {
       const created = await createTask(newTaskData);
       setTasks(prev => prev.map(t => t.id === tempId ? created : t));
+      showToast('Task created successfully', 'success');
     } catch {
       setTasks(prev => prev.filter(t => t.id !== tempId));
-      setError('Failed to create task');
+      showToast('Failed to create task', 'error');
     }
   };
 
@@ -87,9 +105,21 @@ export default function App() {
     setTasks(prev => prev.filter(t => t.id !== id && t.parent_task_id !== id));
     try {
       await deleteTask(id);
+      showToast('Task removed', 'info');
     } catch {
       setTasks(previous);
-      setError('Failed to delete task');
+      showToast('Failed to delete task', 'error');
+    }
+  };
+
+  // Create list handler
+  const handleCreateList = async (listData) => {
+    try {
+      const created = await createList(listData);
+      setLists(prev => [...prev, created]);
+      showToast(`Project list "${created.title}" created`, 'success');
+    } catch {
+      showToast('Failed to create list', 'error');
     }
   };
 
@@ -98,23 +128,34 @@ export default function App() {
     try {
       const logged = await recordFocusSession(sessionData);
       setSessions(prev => [logged, ...prev]);
+      showToast(`Logged ${sessionData.duration_minutes || 25}m focus session`, 'success');
     } catch (err) {
       console.error('Failed to log session:', err);
     }
   };
 
   return (
-    <div className="flex h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased overflow-hidden">
+    <div className="flex h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased overflow-hidden relative">
       
       {/* Persistent Left Sidebar Navigation */}
       <aside className="w-64 border-r border-zinc-800 bg-[#09090B] flex flex-col justify-between p-4 shrink-0">
         <div>
           {/* Logo */}
-          <div className="flex items-center gap-3 px-3 py-4 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/40">
-              A
+          <div className="flex items-center justify-between px-3 py-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/40">
+                A
+              </div>
+              <span className="text-xl font-bold tracking-tight">AlfaFocus</span>
             </div>
-            <span className="text-xl font-bold tracking-tight">AlfaFocus</span>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+              title="Settings & Audio Chimes"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -175,14 +216,24 @@ export default function App() {
             <span className="text-sm font-bold text-emerald-400">7 Days</span>
           </div>
 
-          <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs">
-              <User className="w-4 h-4 text-zinc-300" />
+          <div className="flex items-center justify-between px-2 py-1">
+            <div className="flex items-center gap-2.5 truncate">
+              <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs">
+                <User className="w-3.5 h-3.5 text-zinc-400" />
+              </div>
+              <div className="truncate">
+                <p className="text-xs font-semibold text-zinc-200">AlfaFocus Workspace</p>
+                <p className="text-[10px] text-zinc-500">Active Session</p>
+              </div>
             </div>
-            <div className="truncate">
-              <p className="text-xs font-semibold text-zinc-200">Javie Alfaro</p>
-              <p className="text-[10px] text-zinc-500">Student Account</p>
-            </div>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition"
+              title="Preferences"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </aside>
@@ -197,6 +248,8 @@ export default function App() {
           onAddTask={handleAddTask}
           onDeleteTask={handleDeleteTask}
           onLogSession={handleLogSession}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onShowToast={showToast}
         />
       )}
 
@@ -207,6 +260,8 @@ export default function App() {
           onToggleTask={handleToggleTask}
           onAddTask={handleAddTask}
           onDeleteTask={handleDeleteTask}
+          onCreateList={handleCreateList}
+          onShowToast={showToast}
         />
       )}
 
@@ -214,6 +269,10 @@ export default function App() {
         <CalendarPlanner 
           tasks={tasks}
           sessions={sessions}
+          onAddTask={handleAddTask}
+          onToggleTask={handleToggleTask}
+          onDeleteTask={handleDeleteTask}
+          onShowToast={showToast}
         />
       )}
 
@@ -221,7 +280,35 @@ export default function App() {
         <HabitsHeatMap 
           tasks={tasks}
           sessions={sessions}
+          onShowToast={showToast}
         />
+      )}
+
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSaveToast={showToast}
+      />
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
+          {toast.type === 'success' ? (
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          ) : toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          ) : (
+            <Info className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
+          <span className="text-xs font-medium text-white">{toast.message}</span>
+          <button 
+            onClick={() => setToast(null)}
+            className="text-zinc-500 hover:text-zinc-300 ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
     </div>
