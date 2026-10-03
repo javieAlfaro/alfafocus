@@ -43,21 +43,21 @@ At least six entries. One per real use. Every entry needs a commit link.
 - **What I kept, what I changed, and why:** Kept the heat map tile grid and navigation architecture. Added date tooltip labels and an interactive daily habit routine checklist directly below the grid.
 - **Commit:** https://github.com/javieAlfaro/alfafocus/commit/a08e6b6
 
-### YYYY-MM-DD - (Week 3 entry)
+### 2026-10-03 - Interactive calendar scheduling and view modes
 
-- **Tool:**
-- **What I asked for:**
-- **What it gave back:**
-- **What I kept, what I changed, and why:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Build the Month and Week interactive view modes in `CalendarPlanner.jsx`, mapping user tasks onto dynamic calendar cells by due date, with a date inspector panel that allows quick scheduling.
+- **What it gave back:** A full calendar planner component with month/week toggling, date offset math, task badge rendering, and an inline inspector for adding tasks directly to a selected date.
+- **What I kept, what I changed, and why:** Kept the grid algorithm and date math. Added category color coding (emerald for Work, purple for Study), functional month navigation with Previous/Next controls, and wired the inspector's task creation into the application's global task state.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/17a3353
 
-### YYYY-MM-DD - (Week 3 entry)
+### 2026-10-03 - Web Audio chime synthesizer and browser notifications
 
-- **Tool:**
-- **What I asked for:**
-- **What it gave back:**
-- **What I kept, what I changed, and why:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **Tool:** Antigravity (Google DeepMind / Gemini 3.8 Flash)
+- **What I asked for:** Help implement an audio alert and desktop notification system in `audioAlerts.js` and `SettingsModal.jsx` so users can choose completion chimes and receive notifications even when browsing in another tab.
+- **What it gave back:** A Web Audio API oscillator synthesis module generating Harmonic Bell, Deep Gong, and Digital Beep tones without external MP3 files, plus a Settings preferences modal with a volume slider and Web Notifications API integration.
+- **What I kept, what I changed, and why:** Kept the Web Audio API synthesis logic because it is fully offline-resilient and never suffers from CORS or broken CDN links. Added test sound buttons, localStorage persistence, and connected it directly to `useTimer` so timer completion triggers alerts automatically.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/9f57a85
 
 ## 2. Where the AI got it wrong
 
@@ -78,12 +78,12 @@ scores zero.
 - **What I did instead:** I modified the relational schema to enforce `ON DELETE CASCADE` on `parent_task_id`, so deleting a parent task automatically deletes all of its nested subtasks in a single safe query. I also mirrored this logic in our client `mockApi.js` so child tasks are cleaned up cleanly in demo mode too.
 - **Commit:** https://github.com/javieAlfaro/alfafocus/commit/4d31526
 
-### Case 3 - (Week 3 case)
+### Case 3 - Database pooler password `#` URI fragment crash
 
-- **What it gave me:**
-- **What was wrong with it:**
-- **What I did instead:**
-- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/SHA
+- **What it gave me:** A standard PostgreSQL connection setup using `new pg.Pool({ connectionString: process.env.DATABASE_URL })`.
+- **What was wrong with it:** The auto-generated database password from our cloud Supabase project contained a `#` special character. Standard Node.js `URL` parsers treat `#` as the beginning of a URL hash fragment (anchor). Consequently, the password was prematurely cut off right before `#`, and the remaining characters were discarded as a hash. This caused PostgreSQL connection attempts to fail immediately with authentication errors (`SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string` / password authentication failed).
+- **What I did instead:** I wrote a defensive `normalizeDatabaseUrl` helper in `server/db/pool.js` that parses the raw connection string, extracts the user and password credentials portion, safely percent-encodes the password with `encodeURIComponent()`, and reconstructs a valid URI. This guarantees connection stability regardless of what special characters exist in the database password across both local development and cloud production deployments.
+- **Commit:** https://github.com/javieAlfaro/alfafocus/commit/16dde0f
 
 ## 3. Who wrote what
 
