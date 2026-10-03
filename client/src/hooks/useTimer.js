@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  playSynthesizedChime, 
+  sendDesktopNotification, 
+  getStoredAudioSettings 
+} from '../utils/audioAlerts';
 
 export const TIMER_MODES = {
   POMODORO: { id: 'pomodoro', label: 'Pomo', duration: 25 * 60 },
@@ -11,7 +16,8 @@ export const TIMER_MODES = {
  * Features:
  * - Drift-free countdown using Date.now() timestamp deltas (prevents lag in background tabs)
  * - 3 operational modes: Pomodoro (25m), Deep Work (50m), and Stopwatch (count-up)
- * - Built-in audio chime alert via Web Audio / HTML5 Audio API
+ * - Built-in synthesized audio chimes (Web Audio API) with volume and sound selection
+ * - Browser Web Notifications on session completion
  * - Clean state lifecycle (start, pause, reset, switchMode)
  */
 export function useTimer(onComplete) {
@@ -23,17 +29,19 @@ export function useTimer(onComplete) {
   const expectedEndRef = useRef(null);
   const timerIntervalRef = useRef(null);
 
-  // Play audio alert chime on countdown completion
-  const playAlertSound = useCallback(() => {
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => {
-        // Fallback for strict browser autoplay permissions
-      });
-    } catch {
-      // Audio fallback handling
+  // Play synthesized audio alert chime and desktop notification on completion
+  const triggerCompletionAlerts = useCallback(() => {
+    const settings = getStoredAudioSettings();
+    playSynthesizedChime(settings.soundType, settings.volume);
+    
+    if (settings.notificationsEnabled) {
+      const modeLabel = TIMER_MODES[mode.toUpperCase()]?.label || 'Focus';
+      sendDesktopNotification(
+        'AlfaFocus: Session Complete!',
+        `Your ${modeLabel} block has finished. Time for a quick break or your next task!`
+      );
     }
-  }, []);
+  }, [mode]);
 
   // Main tick evaluation
   const tick = useCallback(() => {
@@ -47,14 +55,14 @@ export function useTimer(onComplete) {
         setIsRunning(false);
         setIsCompleted(true);
         clearInterval(timerIntervalRef.current);
-        playAlertSound();
+        triggerCompletionAlerts();
         if (onComplete) {
           const finishedDuration = TIMER_MODES[mode.toUpperCase()].duration;
           onComplete(finishedDuration);
         }
       }
     }
-  }, [mode, onComplete, playAlertSound]);
+  }, [mode, onComplete, triggerCompletionAlerts]);
 
   useEffect(() => {
     if (isRunning) {
