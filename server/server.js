@@ -1,12 +1,19 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import { pool } from './db/pool.js'
 import * as tasksRepo from './tasksRepo.js'
 import { validateTaskInput, validateFocusSessionInput } from './utils/validators.js'
 
 const app = express()
 
-// 1. CORS Configuration (Checklist #26: named origins, not wildcard)
+// 1. Security Headers via Helmet
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}))
+
+// 2. CORS Configuration (Checklist #26: named origins, not wildcard)
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -14,6 +21,25 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
 
 app.use(cors({ origin: allowedOrigins }))
 app.use(express.json({ limit: '100kb' }))
+
+// 3. Rate Limiting Middleware (Brute-force & DoS Defense)
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+})
+
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again after 15 minutes.' },
+})
+
+app.use('/api', apiLimiter)
 
 // 2. Health check endpoints
 // Process liveness
