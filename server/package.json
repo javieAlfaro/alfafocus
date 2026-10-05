@@ -8,14 +8,22 @@
     "dev": "node --env-file=.env --watch server.js",
     "db:schema": "node --env-file=.env db/run.js db/schema.sql",
     "db:seed": "node --env-file=.env db/run.js db/seed.sql",
-    "db:reset": "npm run db:schema && npm run db:seed"
+    "db:reset": "npm run db:schema && npm run db:seed",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
   }
 }
