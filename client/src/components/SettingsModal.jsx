@@ -7,6 +7,10 @@ import {
   getStoredAudioSettings, 
   saveStoredAudioSettings, 
   playSynthesizedChime, 
+  startAmbientSound,
+  stopAmbientSound,
+  setAmbientVolume,
+  getCurrentAmbientType,
   requestDesktopNotificationPermission,
   sendDesktopNotification
 } from '../utils/audioAlerts';
@@ -36,6 +40,25 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
 
   const handleTestSound = () => {
     playSynthesizedChime(settings.soundType, settings.volume);
+  };
+
+  const handleAmbientChange = (ambientType) => {
+    const updated = { ...settings, ambientSound: ambientType };
+    setSettings(updated);
+    saveStoredAudioSettings(updated);
+    if (ambientType === 'none') {
+      stopAmbientSound();
+    } else {
+      startAmbientSound(ambientType, settings.ambientVolume || 0.3);
+    }
+  };
+
+  const handleAmbientVolumeChange = (e) => {
+    const vol = parseFloat(e.target.value);
+    const updated = { ...settings, ambientVolume: vol };
+    setSettings(updated);
+    saveStoredAudioSettings(updated);
+    setAmbientVolume(vol);
   };
 
   const handleRequestNotifications = async () => {
@@ -152,7 +175,74 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
           </div>
         </div>
 
-        {/* Section 2: Web Notifications */}
+        {/* Section 2: Ambient Focus Sound Synthesizer */}
+        <div className="space-y-4 pt-4 border-t border-zinc-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <Radio className="w-4 h-4 text-emerald-400" />
+                Ambient Flow Generator (Offline Web Audio)
+              </label>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Synthesized background audio to maintain deep concentration
+              </p>
+            </div>
+            {settings.ambientSound !== 'none' && (
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse">
+                Playing
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: 'none', label: 'Off', desc: 'No background sound' },
+              { id: 'whitenoise', label: 'White Noise', desc: 'Continuous focus static' },
+              { id: 'rain', label: 'Gentle Rain', desc: 'Filtered brownian noise' },
+              { id: 'binaural', label: 'Binaural Beats', desc: '10Hz Alpha flow waves' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => handleAmbientChange(option.id)}
+                className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
+                  (settings.ambientSound || 'none') === option.id
+                    ? 'bg-emerald-950/40 border-emerald-500/80 text-white ring-1 ring-emerald-500/50'
+                    : 'bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                }`}
+              >
+                <div>
+                  <p className="text-xs font-semibold">{option.label}</p>
+                  <p className="text-[10px] text-zinc-500">{option.desc}</p>
+                </div>
+                {(settings.ambientSound || 'none') === option.id && (
+                  <Check className="w-4 h-4 text-emerald-400" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Ambient Volume Slider */}
+          {settings.ambientSound !== 'none' && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between text-xs text-zinc-400 font-medium">
+                <span>Ambient Volume</span>
+                <span className="font-mono text-emerald-400">{Math.round((settings.ambientVolume ?? 0.3) * 100)}%</span>
+              </div>
+              <input 
+                type="range"
+                min="0.05"
+                max="0.8"
+                step="0.05"
+                value={settings.ambientVolume ?? 0.3}
+                onChange={handleAmbientVolumeChange}
+                className="w-full accent-emerald-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: Web Notifications */}
         <div className="space-y-3 pt-4 border-t border-zinc-800">
           <div className="flex items-center justify-between">
             <div>

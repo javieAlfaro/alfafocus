@@ -11,6 +11,9 @@ export const DEFAULT_AUDIO_SETTINGS = {
   soundType: 'bell', // 'bell' | 'gong' | 'digital' | 'mute'
   volume: 0.7,       // 0.0 - 1.0
   notificationsEnabled: false,
+  ambientSound: 'none', // 'none' | 'whitenoise' | 'rain' | 'binaural'
+  ambientVolume: 0.3,   // 0.0 - 1.0
+  autoPlayAmbientWithTimer: false,
 };
 
 export function getStoredAudioSettings() {
@@ -159,3 +162,159 @@ export function sendDesktopNotification(title, body) {
     }
   }
 }
+
+/**
+ * Continuous Ambient Focus Sound Synthesizer (Native Web Audio API)
+ * Supports White Noise, Brown/Rain Noise, and 10Hz Binaural Alpha Waves.
+ */
+let activeAmbientNodes = null;
+let currentAmbientType = 'none';
+
+export function stopAmbientSound() {
+  if (activeAmbientNodes) {
+    try {
+      if (activeAmbientNodes.stop) activeAmbientNodes.stop();
+      if (activeAmbientNodes.nodes) {
+        activeAmbientNodes.nodes.forEach(n => {
+          if (n.stop) try { n.stop(); } catch(e){}
+          if (n.disconnect) try { n.disconnect(); } catch(e){}
+        });
+      }
+    } catch (e) {
+      // Ignore audio teardown errors
+    }
+    activeAmbientNodes = null;
+  }
+  currentAmbientType = 'none';
+}
+
+export function startAmbientSound(type = 'whitenoise', volume = 0.3) {
+  stopAmbientSound();
+  if (type === 'none' || volume <= 0) return;
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(Math.max(0.01, Math.min(1.0, volume)), now);
+  masterGain.connect(ctx.destination);
+
+  const cleanupNodes = [masterGain];
+
+  if (type === 'whitenoise') {
+    // 2-second white noise loop buffer
+    const bufferSize = ctx.sampleRate * 2;
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    const whiteNoiseSource = ctx.createBufferSource();
+    whiteNoiseSource.buffer = noiseBuffer;
+    whiteNoiseSource.loop = true;
+
+    // Gentle lowpass to soften harsh frequencies
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2600, now);
+
+    whiteNoiseSource.connect(filter);
+    filter.connect(masterGain);
+    whiteNoiseSource.start(now);
+
+    cleanupNodes.push(whiteNoiseSource, filter);
+    activeAmbientNodes = {
+      gainNode: masterGain,
+      nodes: cleanupNodes,
+      stop: () => {
+        try { whiteNoiseSource.stop(); } catch(e){}
+      }
+    };
+    currentAmbientType = 'whitenoise';
+  } else if (type === 'rain') {
+    // Brownian/Rain filtered noise
+    const bufferSize = ctx.sampleRate * 2;
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      output[i] = (lastOut + (0.02 * white)) / 1.02;
+      lastOut = output[i];
+      output[i] *= 3.5;
+    }
+    const rainSource = ctx.createBufferSource();
+    rainSource.buffer = noiseBuffer;
+    rainSource.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(950, now);
+
+    rainSource.connect(filter);
+    filter.connect(masterGain);
+    rainSource.start(now);
+
+    cleanupNodes.push(rainSource, filter);
+    activeAmbientNodes = {
+      gainNode: masterGain,
+      nodes: cleanupNodes,
+      stop: () => {
+        try { rainSource.stop(); } catch(e){}
+      }
+    };
+    currentAmbientType = 'rain';
+  } else if (type === 'binaural') {
+    // Binaural beats: 200Hz Left ear + 210Hz Right ear = 10Hz Alpha Focus Waves
+    const oscLeft = ctx.createOscillator();
+    const oscRight = ctx.createOscillator();
+    oscLeft.type = 'sine';
+    oscRight.type = 'sine';
+    oscLeft.frequency.setValueAtTime(200, now);
+    oscRight.frequency.setValueAtTime(210, now);
+
+    if (ctx.createStereoPanner) {
+      const panLeft = ctx.createStereoPanner();
+      panLeft.pan.setValueAtTime(-1, now);
+      const panRight = ctx.createStereoPanner();
+      panRight.pan.setValueAtTime(1, now);
+
+      oscLeft.connect(panLeft);
+      panLeft.connect(masterGain);
+      oscRight.connect(panRight);
+      panRight.connect(masterGain);
+      cleanupNodes.push(panLeft, panRight);
+    } else {
+      oscLeft.connect(masterGain);
+      oscRight.connect(masterGain);
+    }
+
+    oscLeft.start(now);
+    oscRight.start(now);
+    cleanupNodes.push(oscLeft, oscRight);
+
+    activeAmbientNodes = {
+      gainNode: masterGain,
+      nodes: cleanupNodes,
+      stop: () => {
+        try { oscLeft.stop(); oscRight.stop(); } catch(e){}
+      }
+    };
+    currentAmbientType = 'binaural';
+  }
+}
+
+export function setAmbientVolume(volume) {
+  if (activeAmbientNodes && activeAmbientNodes.gainNode) {
+    const ctx = getAudioContext();
+    if (ctx) {
+      activeAmbientNodes.gainNode.gain.setValueAtTime(Math.max(0.01, Math.min(1.0, volume)), ctx.currentTime);
+    }
+  }
+}
+
+export function getCurrentAmbientType() {
+  return currentAmbientType;
+}
+

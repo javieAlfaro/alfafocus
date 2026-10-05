@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { 
   CheckCircle2, Circle, Play, Pause, RotateCcw, 
-  Plus, Trash2, Clock, AlertCircle, Settings 
+  Plus, Trash2, Clock, AlertCircle, Settings, Radio 
 } from 'lucide-react';
 import { useTimer } from '../hooks/useTimer';
 import { USING_MOCK_API } from '../api';
+import { 
+  getStoredAudioSettings, 
+  startAmbientSound, 
+  stopAmbientSound 
+} from '../utils/audioAlerts';
 import DemoNotice from './DemoNotice';
 
 export default function FocusHub({ 
@@ -22,6 +27,24 @@ export default function FocusHub({
   const [newTaskCategory, setNewTaskCategory] = useState('WORK');
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [sessionNotice, setSessionNotice] = useState(null);
+  const [ambientPlaying, setAmbientPlaying] = useState(false);
+
+  const toggleQuickAmbient = () => {
+    if (ambientPlaying) {
+      stopAmbientSound();
+      setAmbientPlaying(false);
+      if (onShowToast) onShowToast('Ambient flow paused', 'info');
+    } else {
+      const audioSettings = getStoredAudioSettings();
+      const soundToPlay = audioSettings.ambientSound && audioSettings.ambientSound !== 'none' 
+        ? audioSettings.ambientSound 
+        : 'binaural';
+      startAmbientSound(soundToPlay, audioSettings.ambientVolume ?? 0.3);
+      setAmbientPlaying(true);
+      const label = soundToPlay === 'binaural' ? 'Alpha Waves (10Hz)' : soundToPlay === 'whitenoise' ? 'White Noise' : 'Rain';
+      if (onShowToast) onShowToast(`Playing ${label} flow`, 'success');
+    }
+  };
 
   // Active task fallback
   const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0] || null;
@@ -264,6 +287,27 @@ export default function FocusHub({
                 title="Reset timer"
               >
                 <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Ambient Flow Sound Toggle */}
+            <div className="w-full mt-4 pt-3.5 border-t border-zinc-800 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-zinc-400">
+                <Radio className={`w-3.5 h-3.5 ${ambientPlaying ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}`} />
+                <span className="text-[11px]">
+                  Ambient: <strong className="text-zinc-200 font-medium">{ambientPlaying ? 'Playing' : 'Off'}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleQuickAmbient}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                  ambientPlaying 
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-700 hover:bg-emerald-900' 
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                {ambientPlaying ? 'Pause Ambient' : 'Play Flow Waves'}
               </button>
             </div>
           </div>
