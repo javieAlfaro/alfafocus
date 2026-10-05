@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, Circle, Play, Pause, RotateCcw, 
   Plus, Trash2, Clock, AlertCircle, Settings, Radio,
-  Target, Trophy, Sparkles 
+  Target, Trophy, Sparkles, Search, Filter, X 
 } from 'lucide-react';
 import { useTimer, TIMER_MODES } from '../hooks/useTimer';
 import { USING_MOCK_API } from '../api';
@@ -120,6 +120,27 @@ export default function FocusHub({
 
   const completedCount = tasks.filter(t => t.completed).length;
 
+  // Omni-Search & Category Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  const categories = ['ALL', 'WORK', 'STUDY', 'PERSONAL', 'HEALTH'];
+
+  const categoryCounts = categories.reduce((acc, cat) => {
+    if (cat === 'ALL') {
+      acc[cat] = tasks.length;
+    } else {
+      acc[cat] = tasks.filter(t => (t.category || 'WORK').toUpperCase() === cat).length;
+    }
+    return acc;
+  }, {});
+
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch = !searchQuery.trim() || (task.title || '').toLowerCase().includes(searchQuery.toLowerCase().trim());
+    const matchesCategory = selectedCategory === 'ALL' || (task.category || 'WORK').toUpperCase() === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <div className="flex-1 flex overflow-hidden bg-[#09090B] text-[#FAFAFA]">
       
@@ -192,6 +213,7 @@ export default function FocusHub({
             <option value="WORK">WORK</option>
             <option value="PERSONAL">PERSONAL</option>
             <option value="STUDY">STUDY</option>
+            <option value="HEALTH">HEALTH</option>
           </select>
           <button
             type="submit"
@@ -201,11 +223,65 @@ export default function FocusHub({
           </button>
         </form>
 
+        {/* Omni-Search & Category Tag Filter Pills */}
+        <div className="mb-6 space-y-3">
+          {/* Omni Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input 
+              type="text"
+              placeholder="Search tasks across titles..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-9 py-2.5 bg-[#18181B] border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white p-0.5 rounded"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            {categories.map((cat) => {
+              const count = categoryCounts[cat] || 0;
+              const isSelected = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-lg font-medium text-xs transition shrink-0 flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white font-semibold shadow'
+                      : 'bg-[#18181B] text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700'
+                  }`}
+                >
+                  <span>{cat}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-zinc-800 text-zinc-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Task List */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Today's Tasks</h2>
-            <span className="text-xs text-zinc-500">{tasks.length} total</span>
+            <span className="text-xs text-zinc-500">
+              {filteredTasks.length} shown {filteredTasks.length !== tasks.length && `(of ${tasks.length} total)`}
+            </span>
           </div>
 
           {loading ? (
@@ -214,9 +290,22 @@ export default function FocusHub({
             <div className="p-8 text-center text-sm text-zinc-500 bg-[#18181B] rounded-xl border border-zinc-800">
               No tasks scheduled for today. Add one above to get started!
             </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="p-8 text-center bg-[#18181B] rounded-xl border border-zinc-800 space-y-2">
+              <p className="text-sm text-zinc-400">
+                No tasks match &ldquo;{searchQuery || selectedCategory}&rdquo;
+              </p>
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setSelectedCategory('ALL'); }}
+                className="text-xs text-emerald-400 hover:underline font-semibold"
+              >
+                Clear Search &amp; Filter
+              </button>
+            </div>
           ) : (
             <div className="space-y-2">
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <div 
                   key={task.id}
                   onClick={() => setActiveTaskId(task.id)}
