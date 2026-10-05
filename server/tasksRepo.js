@@ -1,22 +1,60 @@
-// Database operations for Lists, Tasks, and Focus Sessions
+// Database operations for Users, Lists, Tasks, and Focus Sessions
 // Strictly uses parameterized queries ($1, $2) to prevent SQL injection.
 
-export async function getAllLists(pool) {
+export async function findUserByUsername(pool, username) {
+  const result = await pool.query(
+    'SELECT id, username, password_hash, created_at FROM users WHERE LOWER(username) = LOWER($1)',
+    [username]
+  )
+  return result.rows[0] ?? null
+}
+
+export async function findUserById(pool, id) {
+  const result = await pool.query(
+    'SELECT id, username, created_at FROM users WHERE id = $1',
+    [id]
+  )
+  return result.rows[0] ?? null
+}
+
+export async function createUser(pool, { username, password_hash }) {
+  const result = await pool.query(
+    'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username, created_at',
+    [username, password_hash]
+  )
+  return result.rows[0]
+}
+
+export async function getAllLists(pool, userId = null) {
+  if (userId) {
+    const result = await pool.query(
+      'SELECT * FROM task_lists WHERE user_id = $1 ORDER BY id ASC',
+      [userId]
+    )
+    return result.rows
+  }
   const result = await pool.query(
     'SELECT * FROM task_lists ORDER BY id ASC'
   )
   return result.rows
 }
 
-export async function createList(pool, { title, color }) {
+export async function createList(pool, { title, color }, userId = 1) {
   const result = await pool.query(
-    'INSERT INTO task_lists (user_id, title, color) VALUES (1, $1, $2) RETURNING *',
-    [title, color || '#059669']
+    'INSERT INTO task_lists (user_id, title, color) VALUES ($1, $2, $3) RETURNING *',
+    [userId, title, color || '#059669']
   )
   return result.rows[0]
 }
 
-export async function getAllTasks(pool) {
+export async function getAllTasks(pool, userId = null) {
+  if (userId) {
+    const result = await pool.query(
+      'SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    )
+    return result.rows
+  }
   const result = await pool.query(
     'SELECT * FROM tasks ORDER BY created_at DESC'
   )
@@ -31,12 +69,12 @@ export async function getTaskById(pool, id) {
   return result.rows[0] ?? null
 }
 
-export async function createTask(pool, { title, category, priority, due_date, list_id, parent_task_id }) {
+export async function createTask(pool, { title, category, priority, due_date, list_id, parent_task_id }, userId = 1) {
   const result = await pool.query(
     `INSERT INTO tasks (title, category, priority, due_date, list_id, parent_task_id, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 1)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [title, category || 'WORK', priority || 'medium', due_date || null, list_id || 1, parent_task_id || null]
+    [title, category || 'WORK', priority || 'medium', due_date || null, list_id || 1, parent_task_id || null, userId || 1]
   )
   return result.rows[0]
 }
@@ -71,17 +109,24 @@ export async function deleteTask(pool, id) {
   return (result.rowCount ?? 0) > 0
 }
 
-export async function recordFocusSession(pool, { task_id, task_title, mode, duration_minutes }) {
+export async function recordFocusSession(pool, { task_id, task_title, mode, duration_minutes }, userId = 1) {
   const result = await pool.query(
     `INSERT INTO focus_sessions (user_id, task_id, task_title, mode, duration_minutes)
-     VALUES (1, $1, $2, $3, $4)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [task_id || null, task_title || 'General Focus', mode || 'pomodoro', duration_minutes || 25]
+    [userId || 1, task_id || null, task_title || 'General Focus', mode || 'pomodoro', duration_minutes || 25]
   )
   return result.rows[0]
 }
 
-export async function getAllFocusSessions(pool) {
+export async function getAllFocusSessions(pool, userId = null) {
+  if (userId) {
+    const result = await pool.query(
+      'SELECT * FROM focus_sessions WHERE user_id = $1 ORDER BY completed_at DESC',
+      [userId]
+    )
+    return result.rows
+  }
   const result = await pool.query(
     'SELECT * FROM focus_sessions ORDER BY completed_at DESC'
   )

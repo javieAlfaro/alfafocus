@@ -7,8 +7,12 @@
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Ensure password_hash exists if table was created earlier
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 
 -- 2. Task Lists / Folders
 CREATE TABLE IF NOT EXISTS task_lists (

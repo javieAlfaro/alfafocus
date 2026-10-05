@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User, 
-  Settings, CheckCircle, AlertCircle, Info, X, Keyboard, Command 
+  Settings, CheckCircle, AlertCircle, Info, X, Keyboard, Command,
+  LogIn, LogOut 
 } from 'lucide-react';
 import FocusHub from './components/FocusHub';
 import ProjectBreakdown from './components/ProjectBreakdown';
@@ -10,10 +11,12 @@ import CalendarPlanner from './components/CalendarPlanner';
 import SettingsModal from './components/SettingsModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import CommandPalette from './components/CommandPalette';
+import AuthModal from './components/AuthModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
-  listLists, createList, listFocusSessions, recordFocusSession 
+  listLists, createList, listFocusSessions, recordFocusSession,
+  getMe 
 } from './api';
 
 export default function App() {
@@ -28,6 +31,44 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  // Authenticated user state
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem('alfafocus_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const loadAllData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [loadedTasks, loadedLists, loadedSessions] = await Promise.all([
+        listTasks(),
+        listLists(),
+        listFocusSessions(),
+      ]);
+      setTasks(loadedTasks);
+      setLists(loadedLists);
+      setSessions(loadedSessions);
+    } catch (err) {
+      setError(err.message || 'Failed to load application data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('alfafocus_token');
+    localStorage.removeItem('alfafocus_user');
+    setCurrentUser(null);
+    showToast('Signed out of workspace', 'info');
+    loadAllData();
+  };
 
   // Global power-user keyboard shortcuts
   useKeyboardShortcuts({
@@ -51,6 +92,7 @@ export default function App() {
       setIsSettingsOpen(false);
       setIsShortcutsOpen(false);
       setIsCommandPaletteOpen(false);
+      setIsAuthOpen(false);
     },
   });
   
@@ -64,28 +106,10 @@ export default function App() {
     }, 3500);
   };
 
-  // Load shared data on mount
+  // Load shared data on mount and whenever authentication status changes
   useEffect(() => {
-    async function loadAllData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [loadedTasks, loadedLists, loadedSessions] = await Promise.all([
-          listTasks(),
-          listLists(),
-          listFocusSessions(),
-        ]);
-        setTasks(loadedTasks);
-        setLists(loadedLists);
-        setSessions(loadedSessions);
-      } catch (err) {
-        setError(err.message || 'Failed to load application data');
-      } finally {
-        setLoading(false);
-      }
-    }
     loadAllData();
-  }, []);
+  }, [currentUser?.id]);
 
   // Shared task toggle handler (with optimistic update)
   const handleToggleTask = async (task) => {
@@ -263,23 +287,54 @@ export default function App() {
           </div>
 
           <div className="flex items-center justify-between px-2 py-1">
-            <div className="flex items-center gap-2.5 truncate">
-              <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs">
-                <User className="w-3.5 h-3.5 text-zinc-400" />
+            <div 
+              className="flex items-center gap-2.5 truncate cursor-pointer hover:opacity-85 transition"
+              onClick={() => !currentUser && setIsAuthOpen(true)}
+              title={currentUser ? `Logged in as ${currentUser.username}` : "Click to Sign In"}
+            >
+              <div className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs shrink-0 ${
+                currentUser 
+                  ? 'bg-emerald-950/80 border-emerald-700 text-emerald-400 font-bold' 
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+              }`}>
+                {currentUser ? currentUser.username[0]?.toUpperCase() : <User className="w-3.5 h-3.5" />}
               </div>
               <div className="truncate">
-                <p className="text-xs font-semibold text-zinc-200">AlfaFocus Workspace</p>
-                <p className="text-[10px] text-zinc-500">Active Session</p>
+                <p className="text-xs font-semibold text-zinc-200 truncate">
+                  {currentUser ? currentUser.username : 'Guest / Evaluator'}
+                </p>
+                <p className="text-[10px] text-zinc-500">
+                  {currentUser ? 'Active Workspace' : 'Click to Sign In'}
+                </p>
               </div>
             </div>
 
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition"
-              title="Preferences"
-            >
-              <Settings className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-0.5">
+              {currentUser ? (
+                <button
+                  onClick={handleLogout}
+                  className="p-1 rounded text-zinc-500 hover:text-rose-400 transition"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className="p-1 rounded text-zinc-500 hover:text-emerald-400 transition"
+                  title="Sign In / Register"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition"
+                title="Preferences"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -348,6 +403,16 @@ export default function App() {
         onClose={() => setIsCommandPaletteOpen(false)}
         tasks={tasks}
         onSelectView={setCurrentView}
+        onShowToast={showToast}
+      />
+
+      <AuthModal 
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          loadAllData();
+        }}
         onShowToast={showToast}
       />
 

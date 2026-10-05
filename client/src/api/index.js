@@ -14,4 +14,7 @@ export const {
   deleteTask,
   listFocusSessions,
   recordFocusSession,
+  login,
+  register,
+  getMe,
 } = implementation

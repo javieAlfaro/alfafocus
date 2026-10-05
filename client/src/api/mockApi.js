@@ -124,3 +124,28 @@ export async function recordFocusSession(session) {
   localStorage.setItem(SESSIONS_KEY, JSON.stringify([newSession, ...existing]))
   return newSession
 }
+
+export async function login({ username, password }) {
+  await delay(120)
+  const user = { id: 1, username: username || 'alfa_user' }
+  localStorage.setItem('alfafocus_token', 'mock_jwt_session_token')
+  localStorage.setItem('alfafocus_user', JSON.stringify(user))
+  return { user, token: 'mock_jwt_session_token' }
+}
+
+export async function register({ username, password }) {
+  await delay(120)
+  const user = { id: Date.now(), username: username || 'new_user' }
+  localStorage.setItem('alfafocus_token', 'mock_jwt_session_token')
+  localStorage.setItem('alfafocus_user', JSON.stringify(user))
+  return { user, token: 'mock_jwt_session_token' }
+}
+
+export async function getMe() {
+  await delay(60)
+  try {
+    const raw = localStorage.getItem('alfafocus_user')
+    if (raw) return { user: JSON.parse(raw) }
+  } catch {}
+  return { user: { id: 1, username: 'default_user' } }
+}

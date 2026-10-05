@@ -6,9 +6,10 @@ const appPassword = import.meta.env.VITE_APP_PASSWORD || 'alfa2026'
 const basicAuthHeader = typeof btoa === 'function' ? `Basic ${btoa(`${appUser}:${appPassword}`)}` : ''
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem('alfafocus_token')
   const headers = {
     'Content-Type': 'application/json',
-    ...(basicAuthHeader ? { 'Authorization': basicAuthHeader } : {}),
+    ...(token ? { 'Authorization': `Bearer ${token}` } : (basicAuthHeader ? { 'Authorization': basicAuthHeader } : {})),
     'x-app-password': appPassword,
     ...(options.headers || {}),
   }
@@ -31,6 +32,24 @@ async function request(path, options = {}) {
 
   if (response.status === 204) return null
   return response.json()
+}
+
+export function login(credentials) {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  })
+}
+
+export function register(credentials) {
+  return request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  })
+}
+
+export function getMe() {
+  return request('/api/auth/me')
 }
 
 export function listLists() {
