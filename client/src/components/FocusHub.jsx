@@ -68,6 +68,23 @@ export default function FocusHub({
 
   const { timeLeft, formattedTime, isRunning, mode, start, pause, reset, switchMode } = useTimer(handleTimerComplete);
 
+  // Global hotkey integration (Space to toggle, R to reset)
+  useEffect(() => {
+    const handleToggle = () => {
+      if (isRunning) pause();
+      else start();
+    };
+    const handleReset = () => {
+      reset();
+    };
+    window.addEventListener('alfafocus:toggle-timer', handleToggle);
+    window.addEventListener('alfafocus:reset-timer', handleReset);
+    return () => {
+      window.removeEventListener('alfafocus:toggle-timer', handleToggle);
+      window.removeEventListener('alfafocus:reset-timer', handleReset);
+    };
+  }, [isRunning, pause, start, reset]);
+
   // Daily target state & calculations
   const [dailyTarget, setDailyTarget] = useState(() => {
     try {

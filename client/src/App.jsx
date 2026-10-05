@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User, 
-  Settings, CheckCircle, AlertCircle, Info, X 
+  Settings, CheckCircle, AlertCircle, Info, X, Keyboard 
 } from 'lucide-react';
 import FocusHub from './components/FocusHub';
 import ProjectBreakdown from './components/ProjectBreakdown';
 import HabitsHeatMap from './components/HabitsHeatMap';
 import CalendarPlanner from './components/CalendarPlanner';
 import SettingsModal from './components/SettingsModal';
+import ShortcutsModal from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
   listLists, createList, listFocusSessions, recordFocusSession 
@@ -21,8 +23,30 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Settings modal state
+  // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+
+  // Global power-user keyboard shortcuts
+  useKeyboardShortcuts({
+    onToggleTimer: () => {
+      window.dispatchEvent(new CustomEvent('alfafocus:toggle-timer'));
+    },
+    onResetTimer: () => {
+      window.dispatchEvent(new CustomEvent('alfafocus:reset-timer'));
+    },
+    onSelectView: (view) => {
+      setCurrentView(view);
+      showToast(`Switched to ${view.toUpperCase()} screen`, 'info');
+    },
+    onToggleShortcutsModal: () => {
+      setIsShortcutsOpen((prev) => !prev);
+    },
+    onCloseModals: () => {
+      setIsSettingsOpen(false);
+      setIsShortcutsOpen(false);
+    },
+  });
   
   // Toast notification state
   const [toast, setToast] = useState(null);
@@ -149,13 +173,22 @@ export default function App() {
               <span className="text-xl font-bold tracking-tight">AlfaFocus</span>
             </div>
 
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
-              title="Settings & Audio Chimes"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsShortcutsOpen(true)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+                title="Keyboard Shortcuts (?)"
+              >
+                <Keyboard className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+                title="Settings & Audio Chimes"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Links */}
@@ -285,11 +318,16 @@ export default function App() {
         />
       )}
 
-      {/* Settings Modal */}
+      {/* Settings & Shortcuts Modals */}
       <SettingsModal 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaveToast={showToast}
+      />
+
+      <ShortcutsModal 
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
 
       {/* Floating Toast Notification */}
