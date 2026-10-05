@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User, 
-  Settings, CheckCircle, AlertCircle, Info, X, Keyboard 
+  Settings, CheckCircle, AlertCircle, Info, X, Keyboard, Command 
 } from 'lucide-react';
 import FocusHub from './components/FocusHub';
 import ProjectBreakdown from './components/ProjectBreakdown';
@@ -9,6 +9,7 @@ import HabitsHeatMap from './components/HabitsHeatMap';
 import CalendarPlanner from './components/CalendarPlanner';
 import SettingsModal from './components/SettingsModal';
 import ShortcutsModal from './components/ShortcutsModal';
+import CommandPalette from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
@@ -26,6 +27,7 @@ export default function App() {
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Global power-user keyboard shortcuts
   useKeyboardShortcuts({
@@ -42,9 +44,13 @@ export default function App() {
     onToggleShortcutsModal: () => {
       setIsShortcutsOpen((prev) => !prev);
     },
+    onOpenCommandPalette: () => {
+      setIsCommandPaletteOpen((prev) => !prev);
+    },
     onCloseModals: () => {
       setIsSettingsOpen(false);
       setIsShortcutsOpen(false);
+      setIsCommandPaletteOpen(false);
     },
   });
   
@@ -174,6 +180,13 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
+                title="Command Palette (Ctrl+K)"
+              >
+                <Command className="w-4 h-4" />
+              </button>
               <button
                 onClick={() => setIsShortcutsOpen(true)}
                 className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition"
@@ -328,6 +341,14 @@ export default function App() {
       <ShortcutsModal 
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <CommandPalette 
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        tasks={tasks}
+        onSelectView={setCurrentView}
+        onShowToast={showToast}
       />
 
       {/* Floating Toast Notification */}
