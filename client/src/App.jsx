@@ -242,6 +242,7 @@ export default function App() {
       {currentView === 'today' && (
         <FocusHub 
           tasks={tasks}
+          sessions={sessions}
           loading={loading}
           error={error}
           onToggleTask={handleToggleTask}

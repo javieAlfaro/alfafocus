@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, Circle, Play, Pause, RotateCcw, 
-  Plus, Trash2, Clock, AlertCircle, Settings, Radio 
+  Plus, Trash2, Clock, AlertCircle, Settings, Radio,
+  Target, Trophy, Sparkles 
 } from 'lucide-react';
-import { useTimer } from '../hooks/useTimer';
+import { useTimer, TIMER_MODES } from '../hooks/useTimer';
 import { USING_MOCK_API } from '../api';
 import { 
   getStoredAudioSettings, 
@@ -14,6 +15,7 @@ import DemoNotice from './DemoNotice';
 
 export default function FocusHub({ 
   tasks = [], 
+  sessions = [],
   loading = false, 
   error = null, 
   onToggleTask, 
@@ -64,7 +66,45 @@ export default function FocusHub({
     setTimeout(() => setSessionNotice(null), 6000);
   };
 
-  const { formattedTime, isRunning, mode, start, pause, reset, switchMode } = useTimer(handleTimerComplete);
+  const { timeLeft, formattedTime, isRunning, mode, start, pause, reset, switchMode } = useTimer(handleTimerComplete);
+
+  // Daily target state & calculations
+  const [dailyTarget, setDailyTarget] = useState(() => {
+    try {
+      const stored = localStorage.getItem('alfafocus_daily_target');
+      return stored ? parseInt(stored, 10) : 4;
+    } catch {
+      return 4;
+    }
+  });
+
+  const handleUpdateTarget = (delta) => {
+    const updated = Math.max(1, Math.min(12, dailyTarget + delta));
+    setDailyTarget(updated);
+    try {
+      localStorage.setItem('alfafocus_daily_target', String(updated));
+    } catch {}
+    if (onShowToast) onShowToast(`Daily target updated to ${updated} blocks`, 'info');
+  };
+
+  const todayDateStr = new Date().toDateString();
+  const todaySessionsCount = sessions.filter(s => {
+    try {
+      const d = s.completed_at || s.created_at;
+      return d ? new Date(d).toDateString() === todayDateStr : false;
+    } catch {
+      return false;
+    }
+  }).length;
+
+  const targetPercent = Math.min(100, Math.round((todaySessionsCount / dailyTarget) * 100));
+  const isTargetAchieved = todaySessionsCount >= dailyTarget;
+
+  // Active session timer ratio for animated SVG ring
+  const totalModeDuration = TIMER_MODES[mode?.toUpperCase()]?.duration || (25 * 60);
+  const timerRatio = mode === 'stopwatch' 
+    ? ((timeLeft % 60) / 60) 
+    : (totalModeDuration > 0 ? Math.max(0, Math.min(1, (totalModeDuration - timeLeft) / totalModeDuration)) : 0);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -261,9 +301,31 @@ export default function FocusHub({
               ))}
             </div>
 
-            {/* Circular Timer Ring */}
-            <div className="relative w-48 h-48 rounded-full border-4 border-zinc-800 flex items-center justify-center mb-8">
-              <div className="text-center">
+            {/* Circular Timer Ring with Animated SVG Arc */}
+            <div className="relative w-48 h-48 flex items-center justify-center mb-8">
+              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 192 192">
+                <circle
+                  cx="96"
+                  cy="96"
+                  r="84"
+                  fill="none"
+                  stroke="#27272a"
+                  strokeWidth="6"
+                />
+                <circle
+                  cx="96"
+                  cy="96"
+                  r="84"
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="6"
+                  strokeDasharray="527.8"
+                  strokeDashoffset={String(527.8 * (1 - timerRatio))}
+                  strokeLinecap="round"
+                  className="transition-all duration-300 ease-linear"
+                />
+              </svg>
+              <div className="text-center relative z-10">
                 <span className="text-4xl font-mono font-bold tracking-tight text-white block">
                   {formattedTime}
                 </span>
@@ -313,10 +375,83 @@ export default function FocusHub({
           </div>
         </div>
 
-        {/* Daily Progress Tracker */}
+        {/* Gamified Daily Target & Completion Ring */}
+        <div className="p-4 rounded-xl bg-[#18181B] border border-zinc-800 space-y-3">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Daily Target</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-0.5">
+              <button 
+                onClick={() => handleUpdateTarget(-1)} 
+                className="text-zinc-400 hover:text-white px-1 font-bold text-xs"
+                title="Decrease daily target"
+              >
+                -
+              </button>
+              <span className="text-xs font-mono font-bold text-emerald-400">{dailyTarget}</span>
+              <button 
+                onClick={() => handleUpdateTarget(1)} 
+                className="text-zinc-400 hover:text-white px-1 font-bold text-xs"
+                title="Increase daily target"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 pt-1">
+            {/* Target Animated Circular Progress Ring */}
+            <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+              <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="26"
+                  fill="none"
+                  stroke="#27272a"
+                  strokeWidth="5"
+                />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="26"
+                  fill="none"
+                  stroke={isTargetAchieved ? "#10b981" : "#34d399"}
+                  strokeWidth="5"
+                  strokeDasharray="163.3"
+                  strokeDashoffset={String(163.3 * (1 - targetPercent / 100))}
+                  strokeLinecap="round"
+                  className="transition-all duration-500 ease-out"
+                />
+              </svg>
+              <span className="absolute text-[11px] font-mono font-bold text-white">
+                {targetPercent}%
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-200">
+                {todaySessionsCount} of {dailyTarget} Sessions
+              </p>
+              {isTargetAchieved ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" /> Target Reached!
+                </span>
+              ) : (
+                <p className="text-[11px] text-zinc-500">
+                  {dailyTarget - todaySessionsCount} more to hit daily goal
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Tasks Progress Tracker */}
         <div className="p-4 rounded-xl bg-[#18181B] border border-zinc-800">
           <div className="flex justify-between items-center text-xs mb-2">
-            <span className="text-zinc-400 font-medium">Daily Progress</span>
+            <span className="text-zinc-400 font-medium">Daily Task Checklist</span>
             <span className="text-emerald-400 font-bold">{completedCount} / {tasks.length} Tasks</span>
           </div>
           <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
