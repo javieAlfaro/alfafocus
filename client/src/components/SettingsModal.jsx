@@ -15,6 +15,7 @@ import {
   sendDesktopNotification
 } from '../utils/audioAlerts';
 import { USING_MOCK_API } from '../api';
+import AlfaLogo from './AlfaLogo';
 
 export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
   if (!isOpen) return null;
@@ -95,13 +96,13 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-400">
-              <Sparkles className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <AlfaLogo variant="icon" size="md" />
             <div>
-              <h2 className="text-lg font-bold text-white">App Settings &amp; Preferences</h2>
-              <p className="text-xs text-zinc-400">Customize audio alerts, desktop notifications, and environment</p>
+              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+                <span>Alfa<span className="text-emerald-400">Focus</span> Settings</span>
+              </h2>
+              <p className="text-xs text-zinc-400">Audio chimes, notifications &amp; system preferences</p>
             </div>
           </div>
           <button 

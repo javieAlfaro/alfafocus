@@ -12,6 +12,7 @@ import SettingsModal from './components/SettingsModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import CommandPalette from './components/CommandPalette';
 import AuthModal from './components/AuthModal';
+import AlfaLogo from './components/AlfaLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
@@ -196,12 +197,11 @@ export default function App() {
         <div>
           {/* Logo */}
           <div className="flex items-center justify-between px-3 py-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/40">
-                A
-              </div>
-              <span className="text-xl font-bold tracking-tight">AlfaFocus</span>
-            </div>
+            <AlfaLogo 
+              variant="full" 
+              size="md" 
+              onClick={() => setCurrentView('today')} 
+            />
 
             <div className="flex items-center gap-1">
               <button

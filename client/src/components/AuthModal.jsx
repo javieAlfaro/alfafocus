@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, User, Shield, Sparkles, Check, ArrowRight } from 'lucide-react';
 import { login, register } from '../api';
+import AlfaLogo from './AlfaLogo';
 
 export default function AuthModal({ 
   isOpen, 
@@ -83,12 +84,12 @@ export default function AuthModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-400">
-              <Shield className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <AlfaLogo variant="icon" size="md" />
             <div>
-              <h2 className="text-lg font-bold text-white">AlfaFocus Account</h2>
+              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+                <span>Alfa<span className="text-emerald-400">Focus</span> Account</span>
+              </h2>
               <p className="text-xs text-zinc-400">Secure user workspace &amp; data isolation</p>
             </div>
           </div>
