@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Dark Slate Squircle Background -->
+  <rect width="32" height="32" rx="8" fill="#09090B"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#27272A" stroke-width="1"/>
+  
+  <!-- Precision Focal Center Dot -->
+  <circle cx="13" cy="16" r="3.2" fill="#10B981" />
+  
+  <!-- Continuous Greek Alpha (α) with bold lines -->
+  <path 
+    d="M 24.5 7.5 C 22 12 19.5 16 16.5 16 C 12.8 16 9.8 13.1 9.8 9.5 C 9.8 5.9 12.8 3 16.5 3 C 20.2 3 23.2 5.9 23.2 9.5 C 23.2 13.1 20.2 16 16.5 16 C 12.8 16 9.8 18.9 9.8 22.5 C 9.8 26.1 12.8 29 16.5 29 C 19.5 29 22 26 24.5 24.5" 
+    stroke="#10B981" 
+    stroke-width="3.4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round" 
+    fill="none"
+  />
+</svg>
