@@ -3,33 +3,38 @@ import {
   Flame, Clock, CheckCircle2, TrendingUp, Droplets, BookOpen, 
   Award, Download, Plus, Trash2, PieChart, Sparkles 
 } from 'lucide-react';
+import { calculateUserStreak } from '../utils/streak';
 
-const HABITS_STORAGE_KEY = 'alfafocus_habits_v1';
+export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, onShowToast }) {
+  const habitsStorageKey = currentUser?.id ? `alfafocus_habits_${currentUser.id}` : 'alfafocus_habits_guest';
 
-const DEFAULT_HABITS = [
-  { id: 1, title: 'Drink 2L Water', icon: 'water', streak: 4, history: [true, true, true, true, false, false, false] },
-  { id: 2, title: 'Deep Work Session (45m+)', icon: 'focus', streak: 7, history: [true, true, true, true, true, true, false] },
-  { id: 3, title: 'Technical Reading', icon: 'book', streak: 5, history: [true, true, true, true, true, false, false] },
-];
-
-export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }) {
-  // Habit tracking state with localStorage persistence
+  // Habit tracking state with per-user localStorage persistence (default empty for new accounts)
   const [habits, setHabits] = useState(() => {
     try {
-      const stored = localStorage.getItem(HABITS_STORAGE_KEY);
+      const stored = localStorage.getItem(habitsStorageKey);
       if (stored) return JSON.parse(stored);
     } catch {}
-    return DEFAULT_HABITS;
+    return [];
   });
 
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [isAddingHabit, setIsAddingHabit] = useState(false);
 
+  // Sync state if currentUser changes
   useEffect(() => {
     try {
-      localStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(habits));
+      const stored = localStorage.getItem(habitsStorageKey);
+      setHabits(stored ? JSON.parse(stored) : []);
+    } catch {
+      setHabits([]);
+    }
+  }, [habitsStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(habitsStorageKey, JSON.stringify(habits));
     } catch {}
-  }, [habits]);
+  }, [habits, habitsStorageKey]);
 
   const toggleHabitDay = (habitId, dayIndex) => {
     setHabits(prev => prev.map(h => {
@@ -50,8 +55,8 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
       id: Date.now(),
       title: newHabitTitle.trim(),
       icon: 'focus',
-      streak: 1,
-      history: [false, false, false, false, false, true, false],
+      streak: 0,
+      history: [false, false, false, false, false, false, false],
     };
     setHabits([...habits, newHabit]);
     setNewHabitTitle('');
@@ -64,8 +69,8 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
     if (onShowToast) onShowToast('Habit removed', 'info');
   };
 
-  // Generate 12 weeks of heatmap data (84 days)
-  const today = new Date(2026, 9, 3); // Oct 3, 2026
+  // Generate 12 weeks of heatmap data (84 days) strictly from real sessions
+  const today = new Date();
   const heatMapDays = Array.from({ length: 84 }, (_, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (83 - i));
@@ -73,11 +78,7 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
     
     // Check real sessions for this date
     const daySessions = sessions.filter(s => s.completed_at?.startsWith(dateStr));
-    const realMinutes = daySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
-    
-    // Seeded background pattern for older weeks
-    const pseudoDensity = (i % 7 === 1 || i % 7 === 3 || i % 7 === 4 || i > 75) ? ((i * 19) % 70) : 0;
-    const minutes = realMinutes > 0 ? realMinutes : pseudoDensity;
+    const minutes = daySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
 
     let level = 0;
     if (minutes > 60) level = 4;
@@ -99,12 +100,21 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
   };
 
   // Dynamic Metrics Engine
-  const loggedSessionMinutes = sessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
-  const totalFocusMinutes = 1120 + loggedSessionMinutes;
+  const activeStreak = calculateUserStreak(sessions, tasks);
+  const totalFocusMinutes = sessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
   const totalFocusHours = (totalFocusMinutes / 60).toFixed(1);
   const completedTasksCount = tasks.filter(t => t.completed).length;
   const totalTasksCount = tasks.length;
-  const completionRate = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 85;
+  const completionRate = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  let consistencyScore = 0;
+  let consistencyLabel = 'No activity yet';
+  if (totalTasksCount > 0 || sessions.length > 0) {
+    consistencyScore = Math.min(100, Math.round((completionRate * 0.6) + (Math.min(activeStreak, 7) / 7 * 40)));
+    if (consistencyScore >= 80) consistencyLabel = 'Top Tier Productivity';
+    else if (consistencyScore >= 50) consistencyLabel = 'Steady Momentum';
+    else consistencyLabel = 'Building Consistency';
+  }
 
   // Category distribution calculation
   const categoryMinutes = {
@@ -115,7 +125,7 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
   };
 
   tasks.forEach(t => {
-    const cat = t.category || 'WORK';
+    const cat = (t.category || 'WORK').toUpperCase();
     if (categoryMinutes[cat] !== undefined) {
       categoryMinutes[cat] += t.completed ? 45 : 20;
     }
@@ -125,7 +135,8 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
     categoryMinutes.WORK += s.duration_minutes || 25;
   });
 
-  const totalCatMins = Object.values(categoryMinutes).reduce((a, b) => a + b, 0) || 1;
+  const totalCatMins = Object.values(categoryMinutes).reduce((a, b) => a + b, 0);
+  const hasCategoryData = totalCatMins > 0;
 
   // CSV Export Handler
   const handleExportCSV = () => {
@@ -187,11 +198,16 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
         <div className="p-5 rounded-2xl bg-[#18181B] border border-zinc-800 shadow-sm">
           <div className="flex items-center justify-between text-xs text-zinc-400 font-semibold uppercase tracking-wider mb-2">
             <span>Active Streak</span>
-            <Flame className="w-4 h-4 text-emerald-400" />
+            <Flame className={`w-4 h-4 ${activeStreak > 0 ? 'text-emerald-400' : 'text-zinc-500'}`} />
           </div>
-          <p className="text-3xl font-bold text-white tracking-tight">7 <span className="text-sm font-normal text-zinc-400">Days</span></p>
+          <p className="text-3xl font-bold text-white tracking-tight">
+            {activeStreak} <span className="text-sm font-normal text-zinc-400">{activeStreak === 1 ? 'Day' : 'Days'}</span>
+          </p>
           <div className="w-full bg-zinc-800 h-1.5 rounded-full mt-3 overflow-hidden">
-            <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }}></div>
+            <div 
+              className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+              style={{ width: `${Math.min(100, Math.round((activeStreak / 7) * 100))}%` }}
+            />
           </div>
         </div>
 
@@ -201,7 +217,9 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
             <Clock className="w-4 h-4 text-emerald-400" />
           </div>
           <p className="text-3xl font-bold text-white tracking-tight">{totalFocusHours} <span className="text-sm font-normal text-zinc-400">hrs</span></p>
-          <p className="text-[11px] text-emerald-400 mt-2 font-medium">Logged across all focus sessions</p>
+          <p className="text-[11px] text-zinc-400 mt-2 font-medium">
+            {sessions.length === 0 ? 'No sessions logged yet' : `${sessions.length} session${sessions.length > 1 ? 's' : ''} recorded`}
+          </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-[#18181B] border border-zinc-800 shadow-sm">
@@ -210,7 +228,9 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <p className="text-3xl font-bold text-white tracking-tight">{completedTasksCount} <span className="text-sm font-normal text-zinc-400">/ {totalTasksCount}</span></p>
-          <p className="text-[11px] text-zinc-400 mt-2">{completionRate}% Completion Rate</p>
+          <p className="text-[11px] text-zinc-400 mt-2">
+            {totalTasksCount === 0 ? 'No tasks created yet' : `${completionRate}% Completion Rate`}
+          </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-emerald-900/40 shadow-sm">
@@ -218,8 +238,8 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
             <span>Consistency Score</span>
             <Award className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-3xl font-bold text-white tracking-tight">94%</p>
-          <p className="text-[11px] text-emerald-400/90 mt-2 font-medium">Top Tier Productivity</p>
+          <p className="text-3xl font-bold text-white tracking-tight">{consistencyScore}%</p>
+          <p className="text-[11px] text-emerald-400/90 mt-2 font-medium">{consistencyLabel}</p>
         </div>
       </div>
 
@@ -282,52 +302,60 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
             <span className="text-xs text-zinc-400">All-time</span>
           </div>
 
-          <div className="space-y-4">
-            {/* Visual segmented progress bar */}
-            <div className="w-full h-3 rounded-full bg-zinc-800 overflow-hidden flex">
-              <div 
-                style={{ width: `${(categoryMinutes.WORK / totalCatMins) * 100}%` }} 
-                className="bg-emerald-500 h-full" 
-                title="Work" 
-              />
-              <div 
-                style={{ width: `${(categoryMinutes.STUDY / totalCatMins) * 100}%` }} 
-                className="bg-purple-500 h-full" 
-                title="Study" 
-              />
-              <div 
-                style={{ width: `${(categoryMinutes.PERSONAL / totalCatMins) * 100}%` }} 
-                className="bg-amber-500 h-full" 
-                title="Personal" 
-              />
-              <div 
-                style={{ width: `${(categoryMinutes.HEALTH / totalCatMins) * 100}%` }} 
-                className="bg-teal-500 h-full" 
-                title="Health" 
-              />
-            </div>
+          {hasCategoryData ? (
+            <div className="space-y-4">
+              {/* Visual segmented progress bar */}
+              <div className="w-full h-3 rounded-full bg-zinc-800 overflow-hidden flex">
+                <div 
+                  style={{ width: `${(categoryMinutes.WORK / totalCatMins) * 100}%` }} 
+                  className="bg-emerald-500 h-full" 
+                  title="Work" 
+                />
+                <div 
+                  style={{ width: `${(categoryMinutes.STUDY / totalCatMins) * 100}%` }} 
+                  className="bg-purple-500 h-full" 
+                  title="Study" 
+                />
+                <div 
+                  style={{ width: `${(categoryMinutes.PERSONAL / totalCatMins) * 100}%` }} 
+                  className="bg-amber-500 h-full" 
+                  title="Personal" 
+                />
+                <div 
+                  style={{ width: `${(categoryMinutes.HEALTH / totalCatMins) * 100}%` }} 
+                  className="bg-teal-500 h-full" 
+                  title="Health" 
+                />
+              </div>
 
-            {/* Category rows */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              {[
-                { label: 'Work & Projects', key: 'WORK', color: 'bg-emerald-500', mins: categoryMinutes.WORK },
-                { label: 'Study & Coursework', key: 'STUDY', color: 'bg-purple-500', mins: categoryMinutes.STUDY },
-                { label: 'Personal & Creative', key: 'PERSONAL', color: 'bg-amber-500', mins: categoryMinutes.PERSONAL },
-                { label: 'Health & Wellness', key: 'HEALTH', color: 'bg-teal-500', mins: categoryMinutes.HEALTH },
-              ].map(cat => (
-                <div key={cat.key} className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`w-2.5 h-2.5 rounded-full ${cat.color}`} />
-                    <span className="text-xs font-medium text-zinc-300">{cat.label}</span>
+              {/* Category rows */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                {[
+                  { label: 'Work & Projects', key: 'WORK', color: 'bg-emerald-500', mins: categoryMinutes.WORK },
+                  { label: 'Study & Coursework', key: 'STUDY', color: 'bg-purple-500', mins: categoryMinutes.STUDY },
+                  { label: 'Personal & Creative', key: 'PERSONAL', color: 'bg-amber-500', mins: categoryMinutes.PERSONAL },
+                  { label: 'Health & Wellness', key: 'HEALTH', color: 'bg-teal-500', mins: categoryMinutes.HEALTH },
+                ].map(cat => (
+                  <div key={cat.key} className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2.5 h-2.5 rounded-full ${cat.color}`} />
+                      <span className="text-xs font-medium text-zinc-300">{cat.label}</span>
+                    </div>
+                    <div className="flex justify-between items-baseline text-xs text-zinc-400">
+                      <span className="font-mono text-white font-bold">{Math.round((cat.mins / totalCatMins) * 100)}%</span>
+                      <span>{cat.mins} mins</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-baseline text-xs text-zinc-400">
-                    <span className="font-mono text-white font-bold">{Math.round((cat.mins / totalCatMins) * 100)}%</span>
-                    <span>{cat.mins} mins</span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="py-12 px-4 text-center border border-dashed border-zinc-800/80 rounded-xl text-zinc-500 text-xs">
+              <PieChart className="w-6 h-6 text-zinc-600 mx-auto mb-2 opacity-50" />
+              <p className="font-medium text-zinc-400">No category activity recorded</p>
+              <p className="text-[11px] text-zinc-600 mt-1">Complete tasks or log focus sessions to view time breakdown.</p>
+            </div>
+          )}
         </div>
 
         {/* Daily Habits Tracker */}
@@ -362,49 +390,57 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], onShowToast }
             </form>
           )}
 
-          <div className="space-y-3">
-            {habits.map((habit) => (
-              <div key={habit.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-between gap-4 group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 shrink-0">
-                    {habit.icon === 'water' ? <Droplets className="w-4 h-4" /> : habit.icon === 'book' ? <BookOpen className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-100">{habit.title}</p>
-                    <p className="text-xs text-emerald-400 font-medium">{habit.streak} day streak</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Weekly Bubbles */}
-                  <div className="flex items-center gap-1.5">
-                    {habit.history.map((done, dIdx) => (
-                      <button
-                        key={dIdx}
-                        onClick={() => toggleHabitDay(habit.id, dIdx)}
-                        className={`w-7 h-7 rounded-lg flex flex-col items-center justify-center text-[10px] font-semibold transition ${
-                          done 
-                            ? 'bg-emerald-600 text-white font-bold' 
-                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
-                        } ${dIdx === 5 ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-zinc-900' : ''}`}
-                        title={`${daysLabels[dIdx]} - Click to toggle`}
-                      >
-                        {daysLabels[dIdx]}
-                      </button>
-                    ))}
+          {habits.length > 0 ? (
+            <div className="space-y-3">
+              {habits.map((habit) => (
+                <div key={habit.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-between gap-4 group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 shrink-0">
+                      {habit.icon === 'water' ? <Droplets className="w-4 h-4" /> : habit.icon === 'book' ? <BookOpen className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-100">{habit.title}</p>
+                      <p className="text-xs text-emerald-400 font-medium">{habit.streak} day streak</p>
+                    </div>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteHabit(habit.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition ml-1"
-                    title="Delete habit"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Weekly Bubbles */}
+                    <div className="flex items-center gap-1.5">
+                      {habit.history.map((done, dIdx) => (
+                        <button
+                          key={dIdx}
+                          onClick={() => toggleHabitDay(habit.id, dIdx)}
+                          className={`w-7 h-7 rounded-lg flex flex-col items-center justify-center text-[10px] font-semibold transition ${
+                            done 
+                              ? 'bg-emerald-600 text-white font-bold' 
+                              : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                          }`}
+                          title={`${daysLabels[dIdx]} - Click to toggle`}
+                        >
+                          {daysLabels[dIdx]}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteHabit(habit.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 transition ml-1"
+                      title="Delete habit"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 px-4 text-center border border-dashed border-zinc-800/80 rounded-xl text-zinc-500 text-xs">
+              <Sparkles className="w-6 h-6 text-zinc-600 mx-auto mb-2 opacity-50" />
+              <p className="font-medium text-zinc-400">No habit routines added yet</p>
+              <p className="text-[11px] text-zinc-600 mt-1">Click &quot;+ New Habit&quot; above to start tracking daily routines.</p>
+            </div>
+          )}
         </div>
 
       </div>
