@@ -5,13 +5,11 @@ import {
   Target, Trophy, Sparkles, Search, Filter, X 
 } from 'lucide-react';
 import { useTimer, TIMER_MODES } from '../hooks/useTimer';
-import { USING_MOCK_API } from '../api';
 import { 
   getStoredAudioSettings, 
   startAmbientSound, 
   stopAmbientSound 
 } from '../utils/audioAlerts';
-import DemoNotice from './DemoNotice';
 
 export default function FocusHub({ 
   tasks = [], 
@@ -166,14 +164,11 @@ export default function FocusHub({
         <header className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Today's Focus</h1>
-            <p className="text-sm text-zinc-400 mt-1">Saturday, October 3, 2026</p>
+            <p className="text-sm text-zinc-400 mt-1">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            {USING_MOCK_API && (
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                Demo Mode Active
-              </span>
-            )}
             {onOpenSettings && (
               <button
                 type="button"
@@ -186,11 +181,6 @@ export default function FocusHub({
             )}
           </div>
         </header>
-
-        {/* Demo Notice */}
-        <div className="mb-6">
-          <DemoNotice />
-        </div>
 
         {/* Session notification banner */}
         {sessionNotice && (

@@ -14,7 +14,6 @@ import {
   requestDesktopNotificationPermission,
   sendDesktopNotification
 } from '../utils/audioAlerts';
-import { USING_MOCK_API } from '../api';
 import AlfaLogo from './AlfaLogo';
 
 export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
@@ -287,18 +286,12 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
               <Laptop className="w-3.5 h-3.5 text-zinc-400" />
               API Deployment Mode
             </span>
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-              USING_MOCK_API 
-                ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60' 
-                : 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
-            }`}>
-              {USING_MOCK_API ? 'Local Client Demo' : 'Cloud Render API'}
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+              Cloud Render API
             </span>
           </div>
           <p className="text-[10px] text-zinc-500 font-mono">
-            {USING_MOCK_API 
-              ? 'Local storage mode with immediate offline resilience' 
-              : 'Connected to https://alfafocus-api.onrender.com (Supabase PostgreSQL)'}
+            Connected to https://alfafocus-api.onrender.com (Supabase PostgreSQL)
           </p>
         </div>
 
