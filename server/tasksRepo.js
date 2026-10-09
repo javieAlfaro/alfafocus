@@ -47,6 +47,83 @@ export async function createList(pool, { title, color }, userId = 1) {
   return result.rows[0]
 }
 
+export async function getListById(pool, id, userId = null) {
+  if (userId) {
+    const result = await pool.query(
+      'SELECT * FROM task_lists WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    )
+    return result.rows[0] ?? null
+  }
+  const result = await pool.query(
+    'SELECT * FROM task_lists WHERE id = $1',
+    [id]
+  )
+  return result.rows[0] ?? null
+}
+
+export async function updateList(pool, id, { title, color }, userId = null) {
+  const current = await getListById(pool, id, userId)
+  if (!current) return null
+
+  const updatedTitle = typeof title === 'string' && title.trim() ? title.trim() : current.title
+  const updatedColor = typeof color === 'string' && color.trim() ? color.trim() : current.color
+
+  if (userId) {
+    const result = await pool.query(
+      `UPDATE task_lists
+       SET title = $1, color = $2
+       WHERE id = $3 AND user_id = $4
+       RETURNING *`,
+      [updatedTitle, updatedColor, id, userId]
+    )
+    return result.rows[0] ?? null
+  }
+
+  const result = await pool.query(
+    `UPDATE task_lists
+     SET title = $1, color = $2
+     WHERE id = $3
+     RETURNING *`,
+    [updatedTitle, updatedColor, id]
+  )
+  return result.rows[0] ?? null
+}
+
+export async function deleteList(pool, id, defaultListId = null, userId = null) {
+  const current = await getListById(pool, id, userId)
+  if (!current) return false
+
+  // Reassign tasks from the deleted list to defaultListId before deleting so tasks are preserved
+  if (defaultListId && Number(defaultListId) !== Number(id)) {
+    if (userId) {
+      await pool.query(
+        'UPDATE tasks SET list_id = $1 WHERE list_id = $2 AND user_id = $3',
+        [defaultListId, id, userId]
+      )
+    } else {
+      await pool.query(
+        'UPDATE tasks SET list_id = $1 WHERE list_id = $2',
+        [defaultListId, id]
+      )
+    }
+  }
+
+  if (userId) {
+    const result = await pool.query(
+      'DELETE FROM task_lists WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, userId]
+    )
+    return (result.rowCount ?? 0) > 0
+  }
+
+  const result = await pool.query(
+    'DELETE FROM task_lists WHERE id = $1 RETURNING id',
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
 export async function getAllTasks(pool, userId = null) {
   if (userId) {
     const result = await pool.query(

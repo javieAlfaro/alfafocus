@@ -218,6 +218,28 @@ app.post('/api/lists', async (request, response, next) => {
   }
 })
 
+app.patch('/api/lists/:id', async (request, response, next) => {
+  const { title, color } = request.body || {}
+  try {
+    const updated = await tasksRepo.updateList(pool, request.params.id, { title, color }, request.user?.id)
+    if (!updated) return response.status(404).json({ error: 'List not found' })
+    response.json(updated)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/lists/:id', async (request, response, next) => {
+  try {
+    const defaultListId = request.query.defaultListId || request.body?.defaultListId || null
+    const deleted = await tasksRepo.deleteList(pool, request.params.id, defaultListId, request.user?.id)
+    if (!deleted) return response.status(404).json({ error: 'List not found' })
+    response.json({ success: true, message: 'List deleted' })
+  } catch (error) {
+    next(error)
+  }
+})
+
 // 6. Task Endpoints
 app.get('/api/tasks', async (request, response, next) => {
   try {
