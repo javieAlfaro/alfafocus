@@ -17,9 +17,13 @@ export default function CalendarPlanner({
   onDeleteTask,
   onShowToast
 }) {
-  // Calendar viewed month: default to October 2026
-  const [viewDate, setViewDate] = useState(new Date(2026, 9, 1));
-  const [selectedDateStr, setSelectedDateStr] = useState('2026-10-03');
+  // Dynamic current date reference
+  const todayObj = new Date();
+  const todayDateStr = todayObj.toISOString().slice(0, 10);
+
+  // Calendar viewed month: default to current month
+  const [viewDate, setViewDate] = useState(() => new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
+  const [selectedDateStr, setSelectedDateStr] = useState(todayDateStr);
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
   
   // Quick-add state for the inspector
@@ -47,8 +51,8 @@ export default function CalendarPlanner({
   };
 
   const handleGoToday = () => {
-    setViewDate(new Date(2026, 9, 1));
-    setSelectedDateStr('2026-10-03');
+    setViewDate(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
+    setSelectedDateStr(todayDateStr);
   };
 
   // Build Month cells
@@ -59,7 +63,7 @@ export default function CalendarPlanner({
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${currentYear}-${String(currentMonthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayTasks = tasks.filter(t => t.due_date === dateStr || (!t.due_date && dateStr === '2026-10-03'));
+    const dayTasks = tasks.filter(t => t.due_date === dateStr || (!t.due_date && dateStr === todayDateStr));
     const daySessions = sessions.filter(s => s.completed_at?.startsWith(dateStr));
     
     calendarCells.push({
@@ -68,7 +72,7 @@ export default function CalendarPlanner({
       dateStr,
       tasks: dayTasks,
       sessions: daySessions,
-      isToday: dateStr === '2026-10-03',
+      isToday: dateStr === todayDateStr,
       isSelected: dateStr === selectedDateStr,
       key: `day-${dateStr}`
     });

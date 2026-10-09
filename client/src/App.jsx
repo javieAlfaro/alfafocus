@@ -15,6 +15,7 @@ import AuthModal from './components/AuthModal';
 import AuthPage from './components/AuthPage';
 import AlfaLogo from './components/AlfaLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { calculateUserStreak } from './utils/streak';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
   listLists, createList, listFocusSessions, recordFocusSession,
@@ -63,6 +64,9 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Compute dynamic consistency streak from user's sessions and completed tasks
+  const userStreak = calculateUserStreak(sessions, tasks);
 
   const handleLogout = () => {
     localStorage.removeItem('alfafocus_token');
@@ -316,10 +320,12 @@ export default function App() {
         <div className="pt-4 border-t border-zinc-800 space-y-3">
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#18181B] border border-zinc-800">
             <div className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-emerald-400 animate-pulse" />
+              <Flame className={`w-5 h-5 ${userStreak > 0 ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}`} />
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Streak</span>
             </div>
-            <span className="text-sm font-bold text-emerald-400">7 Days</span>
+            <span className={`text-sm font-bold ${userStreak > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              {userStreak} {userStreak === 1 ? 'Day' : 'Days'}
+            </span>
           </div>
 
           <div className="flex items-center justify-between px-2 py-1">
@@ -418,6 +424,7 @@ export default function App() {
         <HabitsHeatMap 
           tasks={tasks}
           sessions={sessions}
+          currentUser={currentUser}
           onShowToast={showToast}
         />
       )}
