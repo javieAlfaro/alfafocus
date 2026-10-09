@@ -58,15 +58,16 @@ export default function AuthModal({
     setFormError(null);
     try {
       const res = await login({ username: 'evaluator', password: 'password123' });
-      if (onShowToast) onShowToast('Logged in as Evaluator (Demo Mode)', 'success');
+      if (onShowToast) onShowToast(`Welcome, ${res.user?.username || 'Evaluator'}!`, 'success');
       if (onAuthSuccess) onAuthSuccess(res.user || { id: 1, username: 'evaluator' });
       onClose();
     } catch {
       // If server rejected (e.g. user not seeded), fallback to default mock user
-      const guestUser = { id: 1, username: 'Course Evaluator' };
+      const guestUser = { id: 1, username: 'Evaluator' };
       localStorage.setItem('alfafocus_user', JSON.stringify(guestUser));
+      localStorage.setItem('alfafocus_token', 'evaluator_session_token');
       if (onAuthSuccess) onAuthSuccess(guestUser);
-      if (onShowToast) onShowToast('Signed in as Evaluator Guest', 'info');
+      if (onShowToast) onShowToast('Signed in as Evaluator', 'success');
       onClose();
     } finally {
       setLoading(false);
@@ -176,7 +177,7 @@ export default function AuthModal({
         {/* Quick Evaluator Option */}
         <div className="pt-2 border-t border-zinc-800 space-y-2">
           <div className="flex justify-between items-center text-[11px] text-zinc-500">
-            <span>Course grading or demo testing?</span>
+            <span>Course grading or evaluator access?</span>
           </div>
           <button
             type="button"

@@ -12,6 +12,7 @@ import SettingsModal from './components/SettingsModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import CommandPalette from './components/CommandPalette';
 import AuthModal from './components/AuthModal';
+import AuthPage from './components/AuthPage';
 import AlfaLogo from './components/AlfaLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { 
@@ -109,7 +110,9 @@ export default function App() {
 
   // Load shared data on mount and whenever authentication status changes
   useEffect(() => {
-    loadAllData();
+    if (currentUser) {
+      loadAllData();
+    }
   }, [currentUser?.id]);
 
   // Shared task toggle handler (with optimistic update)
@@ -188,6 +191,39 @@ export default function App() {
       console.error('Failed to log session:', err);
     }
   };
+
+  // If unauthenticated, render the dedicated Login / Register landing page
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased relative">
+        <AuthPage 
+          onAuthSuccess={(user) => {
+            setCurrentUser(user);
+          }}
+          onShowToast={showToast}
+        />
+        {/* Floating Toast Notification */}
+        {toast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
+            {toast.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <Info className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span className="text-xs font-medium text-white">{toast.message}</span>
+            <button 
+              onClick={() => setToast(null)}
+              className="text-zinc-500 hover:text-zinc-300 ml-2"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased overflow-hidden relative">
