@@ -122,6 +122,20 @@ export function createList(input) {
   })
 }
 
+export function updateList(id, input) {
+  return request(`/api/lists/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteList(id, defaultListId = null) {
+  const query = defaultListId ? `?defaultListId=${defaultListId}` : ''
+  return request(`/api/lists/${id}${query}`, {
+    method: 'DELETE',
+  })
+}
+
 export function listTasks() {
   return request('/api/tasks')
 }

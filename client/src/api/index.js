@@ -9,6 +9,8 @@ const implementation = USING_MOCK_API ? mockApi : httpApi
 export const {
   listLists,
   createList,
+  updateList,
+  deleteList,
   listTasks,
   createTask,
   updateTask,

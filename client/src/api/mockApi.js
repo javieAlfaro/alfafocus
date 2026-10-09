@@ -63,6 +63,31 @@ export async function createList(input) {
   return newList
 }
 
+export async function updateList(id, input) {
+  await delay()
+  const lists = readLists()
+  const target = lists.find(l => l.id === Number(id) || l.id === id)
+  if (!target) throw new Error('List not found')
+  if (input.title) target.title = input.title
+  if (input.color) target.color = input.color
+  localStorage.setItem(LISTS_KEY, JSON.stringify(lists))
+  return target
+}
+
+export async function deleteList(id, defaultListId = null) {
+  await delay()
+  const lists = readLists()
+  const filtered = lists.filter(l => l.id !== Number(id) && l.id !== id)
+  localStorage.setItem(LISTS_KEY, JSON.stringify(filtered))
+
+  if (defaultListId) {
+    const tasks = readTasks()
+    const reassigned = tasks.map(t => (t.list_id === Number(id) || t.list_id === id) ? { ...t, list_id: defaultListId } : t)
+    writeTasks(reassigned)
+  }
+  return { success: true }
+}
+
 export async function listTasks() {
   await delay()
   return readTasks().slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))

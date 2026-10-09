@@ -18,7 +18,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { calculateUserStreak } from './utils/streak';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
-  listLists, createList, listFocusSessions, recordFocusSession,
+  listLists, createList, updateList, deleteList, listFocusSessions, recordFocusSession,
   getMe 
 } from './api';
 
@@ -174,14 +174,69 @@ export default function App() {
     }
   };
 
+  // Shared task update handler (title, priority, list_id reassignment, etc.)
+  const handleUpdateTask = async (id, fields) => {
+    const previous = tasks;
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...fields } : t));
+    try {
+      const updated = await updateTask(id, fields);
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updated } : t));
+      if (fields.list_id !== undefined) {
+        showToast('Task moved to project', 'success');
+      }
+    } catch {
+      setTasks(previous);
+      showToast('Failed to update task', 'error');
+    }
+  };
+
   // Create list handler
   const handleCreateList = async (listData) => {
     try {
       const created = await createList(listData);
       setLists(prev => [...prev, created]);
       showToast(`Project list "${created.title}" created`, 'success');
+      return created;
     } catch {
       showToast('Failed to create list', 'error');
+      return null;
+    }
+  };
+
+  // Update list handler (rename, color change)
+  const handleUpdateList = async (id, listData) => {
+    const previous = lists;
+    setLists(prev => prev.map(l => (l.id === id ? { ...l, ...listData } : l)));
+    try {
+      const updated = await updateList(id, listData);
+      setLists(prev => prev.map(l => (l.id === id ? updated : l)));
+      showToast(`Project updated`, 'success');
+      return updated;
+    } catch {
+      setLists(previous);
+      showToast('Failed to update project', 'error');
+      return null;
+    }
+  };
+
+  // Delete list handler (with safe task preservation)
+  const handleDeleteList = async (id) => {
+    const defaultList = lists.find(l => l.id !== id);
+    const defaultListId = defaultList ? defaultList.id : 1;
+    const previousLists = lists;
+    const previousTasks = tasks;
+
+    // Optimistically reassign tasks belonging to this list to default list
+    setTasks(prev => prev.map(t => t.list_id === id ? { ...t, list_id: defaultListId } : t));
+    setLists(prev => prev.filter(l => l.id !== id));
+
+    try {
+      await deleteList(id, defaultListId);
+      showToast(`Project deleted (tasks preserved in ${defaultList?.title || 'General'})`, 'info');
+    } catch {
+      setLists(previousLists);
+      setTasks(previousTasks);
+      showToast('Failed to delete project', 'error');
     }
   };
 
@@ -403,8 +458,11 @@ export default function App() {
           lists={lists}
           onToggleTask={handleToggleTask}
           onAddTask={handleAddTask}
+          onUpdateTask={handleUpdateTask}
           onDeleteTask={handleDeleteTask}
           onCreateList={handleCreateList}
+          onUpdateList={handleUpdateList}
+          onDeleteList={handleDeleteList}
           onShowToast={showToast}
         />
       )}
