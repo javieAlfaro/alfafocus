@@ -3,10 +3,12 @@
 -- Safe to run after schema.sql.
 -- =========================================================
 
--- Create default user
-INSERT INTO users (id, username)
-VALUES (1, 'default_user')
-ON CONFLICT (id) DO NOTHING;
+-- Create default user and evaluator user (password: password123)
+INSERT INTO users (id, username, password_hash)
+VALUES 
+  (1, 'default_user', NULL),
+  (2, 'evaluator', '$2b$10$Tcpb2sSjLhIf6CLYKhmLQeJ/0W.iLKvKjyZUhkkQ0yVUkRzozHH86')
+ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- Reset sequence for users
 SELECT setval('users_id_seq', (SELECT GREATEST(MAX(id), 1) FROM users));

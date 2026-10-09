@@ -144,7 +144,12 @@ app.use('/api', (request, response, next) => {
   if (request.method === 'OPTIONS') return next()
 
   // Allow registration and login without credentials
-  if (request.path === '/auth/register' || request.path === '/auth/login') {
+  if (
+    request.path === '/auth/register' || 
+    request.path === '/auth/login' ||
+    request.path.startsWith('/auth') ||
+    request.originalUrl?.includes('/api/auth')
+  ) {
     return next()
   }
 
