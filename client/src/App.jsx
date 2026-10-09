@@ -22,6 +22,44 @@ import {
   getMe 
 } from './api';
 
+class ViewErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('ViewErrorBoundary caught error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#09090B] text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Something went wrong in this view</h2>
+          <p className="text-xs text-zinc-400 max-w-md">
+            {this.state.error?.message || 'An unexpected rendering error occurred.'}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onReset) this.props.onReset();
+            }}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+          >
+            Return to Today Screen
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState('today'); // today | lists | calendar | habits
   const [tasks, setTasks] = useState([]);
@@ -436,56 +474,58 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Dynamic View Container */}
-      {currentView === 'today' && (
-        <FocusHub 
-          tasks={tasks}
-          sessions={sessions}
-          loading={loading}
-          error={error}
-          onToggleTask={handleToggleTask}
-          onAddTask={handleAddTask}
-          onDeleteTask={handleDeleteTask}
-          onLogSession={handleLogSession}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onShowToast={showToast}
-        />
-      )}
+      {/* Dynamic View Container protected by ErrorBoundary */}
+      <ViewErrorBoundary onReset={() => setCurrentView('today')}>
+        {currentView === 'today' && (
+          <FocusHub 
+            tasks={tasks}
+            sessions={sessions}
+            loading={loading}
+            error={error}
+            onToggleTask={handleToggleTask}
+            onAddTask={handleAddTask}
+            onDeleteTask={handleDeleteTask}
+            onLogSession={handleLogSession}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onShowToast={showToast}
+          />
+        )}
 
-      {currentView === 'lists' && (
-        <ProjectBreakdown 
-          tasks={tasks}
-          lists={lists}
-          onToggleTask={handleToggleTask}
-          onAddTask={handleAddTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
-          onCreateList={handleCreateList}
-          onUpdateList={handleUpdateList}
-          onDeleteList={handleDeleteList}
-          onShowToast={showToast}
-        />
-      )}
+        {currentView === 'lists' && (
+          <ProjectBreakdown 
+            tasks={tasks}
+            lists={lists}
+            onToggleTask={handleToggleTask}
+            onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            onCreateList={handleCreateList}
+            onUpdateList={handleUpdateList}
+            onDeleteList={handleDeleteList}
+            onShowToast={showToast}
+          />
+        )}
 
-      {currentView === 'calendar' && (
-        <CalendarPlanner 
-          tasks={tasks}
-          sessions={sessions}
-          onAddTask={handleAddTask}
-          onToggleTask={handleToggleTask}
-          onDeleteTask={handleDeleteTask}
-          onShowToast={showToast}
-        />
-      )}
+        {currentView === 'calendar' && (
+          <CalendarPlanner 
+            tasks={tasks}
+            sessions={sessions}
+            onAddTask={handleAddTask}
+            onToggleTask={handleToggleTask}
+            onDeleteTask={handleDeleteTask}
+            onShowToast={showToast}
+          />
+        )}
 
-      {currentView === 'habits' && (
-        <HabitsHeatMap 
-          tasks={tasks}
-          sessions={sessions}
-          currentUser={currentUser}
-          onShowToast={showToast}
-        />
-      )}
+        {currentView === 'habits' && (
+          <HabitsHeatMap 
+            tasks={tasks}
+            sessions={sessions}
+            currentUser={currentUser}
+            onShowToast={showToast}
+          />
+        )}
+      </ViewErrorBoundary>
 
       {/* Settings & Shortcuts Modals */}
       <SettingsModal 

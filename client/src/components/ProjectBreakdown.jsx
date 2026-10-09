@@ -61,7 +61,7 @@ export default function ProjectBreakdown({
     }
   }, [lists, selectedListId]);
 
-  const activeList = lists.find(l => l.id === selectedListId) || lists[0];
+  const activeList = lists.find(l => l.id === selectedListId) || lists[0] || { id: 1, title: 'My Tasks', color: '#10B981' };
   const listTasks = tasks.filter(t => t.list_id === selectedListId || (!t.list_id && selectedListId === 1));
 
   // Separate root tasks from nested subtasks
@@ -352,7 +352,7 @@ export default function ProjectBreakdown({
                 }`}
                 title="Kanban Columns View"
               >
-                <LayoutKanban className="w-3.5 h-3.5" />
+                <Kanban className="w-3.5 h-3.5" />
                 <span>Kanban Board</span>
               </button>
             </div>
