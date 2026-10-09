@@ -84,6 +84,7 @@ app.post('/api/auth/register', authLimiter, async (request, response, next) => {
 
     const password_hash = await hashPassword(password)
     const newUser = await tasksRepo.createUser(pool, { username, password_hash })
+    await tasksRepo.createList(pool, { title: 'My Tasks', color: '#059669' }, newUser.id)
     const token = generateToken(newUser)
 
     response.status(201).json({
