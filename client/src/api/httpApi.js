@@ -55,22 +55,56 @@ export async function login(credentials) {
       localStorage.setItem('alfafocus_token', 'evaluator_fallback_token')
       return { user: fallbackUser, token: 'evaluator_fallback_token' }
     }
+
+    // If backend is on a previous deployment without auth endpoints ("No such route" or 404)
+    if (err.message === 'No such route' || err.message?.includes('404')) {
+      const storedUsers = JSON.parse(localStorage.getItem('alfafocus_local_accounts') || '{}')
+      const lower = credentials.username.toLowerCase()
+      const account = storedUsers[lower]
+      if (account && account.password === credentials.password) {
+        localStorage.setItem('alfafocus_user', JSON.stringify(account.user))
+        localStorage.setItem('alfafocus_token', 'local_token_' + Date.now())
+        return { user: account.user, token: 'local_token_' + Date.now() }
+      }
+      if (!account) {
+        throw new Error('User not found. If this is a new account, please click "Register" below.')
+      }
+      throw new Error('Invalid username or password.')
+    }
     throw err
   }
 }
 
 export async function register(credentials) {
-  const data = await request('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(credentials),
-  })
-  if (data?.token) {
-    localStorage.setItem('alfafocus_token', data.token)
+  try {
+    const data = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    })
+    if (data?.token) {
+      localStorage.setItem('alfafocus_token', data.token)
+    }
+    if (data?.user) {
+      localStorage.setItem('alfafocus_user', JSON.stringify(data.user))
+    }
+    return data
+  } catch (err) {
+    // If backend is on a previous deployment without auth endpoints ("No such route" or 404)
+    if (err.message === 'No such route' || err.message?.includes('404')) {
+      const storedUsers = JSON.parse(localStorage.getItem('alfafocus_local_accounts') || '{}')
+      const lower = credentials.username.toLowerCase()
+      if (storedUsers[lower]) {
+        throw new Error('Username already taken. Please choose another username.')
+      }
+      const localUser = { id: Date.now(), username: credentials.username }
+      storedUsers[lower] = { user: localUser, password: credentials.password }
+      localStorage.setItem('alfafocus_local_accounts', JSON.stringify(storedUsers))
+      localStorage.setItem('alfafocus_user', JSON.stringify(localUser))
+      localStorage.setItem('alfafocus_token', 'local_token_' + Date.now())
+      return { user: localUser, token: 'local_token_' + Date.now() }
+    }
+    throw err
   }
-  if (data?.user) {
-    localStorage.setItem('alfafocus_user', JSON.stringify(data.user))
-  }
-  return data
 }
 
 export function getMe() {
