@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   FolderPlus, ChevronRight, ChevronDown, CheckCircle2, Circle, 
-  Plus, MoreVertical, Trash2, Clock, CheckSquare
+  Plus, MoreVertical, Trash2, Clock, CheckSquare, Calendar, Tag, Flag
 } from 'lucide-react';
 
 export default function ProjectBreakdown({ 
@@ -20,8 +20,37 @@ export default function ProjectBreakdown({
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState('');
 
+  // Root task quick-creation state
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState('medium');
+  const [newTaskCategory, setNewTaskCategory] = useState('WORK');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const taskInputRef = useRef(null);
+
+  // Sync selectedListId defensively when lists change
+  useEffect(() => {
+    if (lists.length > 0 && !lists.some(l => l.id === selectedListId)) {
+      setSelectedListId(lists[0].id);
+    }
+  }, [lists, selectedListId]);
+
   const activeList = lists.find(l => l.id === selectedListId) || lists[0];
   const listTasks = tasks.filter(t => t.list_id === selectedListId || (!t.list_id && selectedListId === 1));
+
+  const handleCreateRootTask = (e) => {
+    e?.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    onAddTask({
+      title: newTaskTitle.trim(),
+      list_id: selectedListId,
+      priority: newTaskPriority,
+      category: newTaskCategory,
+      due_date: newTaskDueDate || null,
+    });
+    setNewTaskTitle('');
+    setNewTaskDueDate('');
+    if (onShowToast) onShowToast(`Task added to ${activeList?.title || 'project'}`, 'success');
+  };
 
   // Separate root tasks from nested subtasks
   const rootTasks = listTasks.filter(t => !t.parent_task_id);
@@ -171,11 +200,96 @@ export default function ProjectBreakdown({
           </div>
         </header>
 
+        {/* Quick Add Root Task Bar */}
+        <form 
+          onSubmit={handleCreateRootTask}
+          className="mb-6 p-3 bg-[#18181B] border border-zinc-800 rounded-2xl shadow-sm focus-within:border-emerald-500/50 transition-all max-w-4xl"
+        >
+          <div className="flex items-center gap-3 px-2 py-1">
+            <Plus className="w-5 h-5 text-emerald-400 shrink-0" />
+            <input 
+              ref={taskInputRef}
+              type="text"
+              placeholder={`Add a new task to ${activeList?.title || 'this project'}... (Press Enter)`}
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 mt-2 border-t border-zinc-800/80 px-2 text-xs">
+            <div className="flex items-center gap-2">
+              {/* Priority Select */}
+              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+                {['low', 'medium', 'high'].map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setNewTaskPriority(p)}
+                    className={`px-2 py-1 rounded text-[11px] font-medium capitalize transition ${
+                      newTaskPriority === p
+                        ? p === 'high' ? 'bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30'
+                          : p === 'medium' ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
+                          : 'bg-zinc-700 text-zinc-200 font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              {/* Category Select */}
+              <select
+                value={newTaskCategory}
+                onChange={(e) => setNewTaskCategory(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-700"
+              >
+                {['WORK', 'STUDY', 'PERSONAL', 'HEALTH'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              {/* Due Date Input */}
+              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-zinc-400">
+                <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                <input 
+                  type="date"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                  className="bg-transparent text-[11px] text-zinc-300 focus:outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!newTaskTitle.trim()}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition shadow-sm"
+            >
+              Add Task
+            </button>
+          </div>
+        </form>
+
         {/* Hierarchical Task List */}
         <div className="space-y-4 max-w-4xl">
           {rootTasks.length === 0 ? (
-            <div className="p-8 text-center bg-[#18181B] rounded-2xl border border-zinc-800 text-zinc-500 text-sm">
-              No tasks in this project yet. Add tasks from the Today screen or create one below.
+            <div className="p-12 text-center bg-[#18181B] rounded-2xl border border-zinc-800/80 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
+                <CheckSquare className="w-6 h-6 text-emerald-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-200">No tasks in {activeList?.title || 'this project'} yet</h3>
+              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                Break your project down into achievable goals. Use the creator bar above to add your first task.
+              </p>
+              <button
+                type="button"
+                onClick={() => taskInputRef.current?.focus()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-500/30 transition"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create First Task
+              </button>
             </div>
           ) : (
             rootTasks.map((task) => {
