@@ -8,7 +8,7 @@
 **API:** https://alfafocus-api.onrender.com/healthz  
 **Demo video:** *(Week 3 Submission)*
 
-> **This deployment is running in demo mode.** The interface is fully functional; the backend is simulated in your browser using `localStorage` so the site works without a server. Once the cloud API is live, setting `VITE_USE_MOCK_API=false` seamlessly routes all calls to the Express and PostgreSQL backend.
+> **Live Authentication & Backend Active:** Demo mode is disabled. The application is connected to the live Express API on Render and PostgreSQL on Supabase, featuring user registration, JWT session management, and isolated workspaces.
 
 ---
 
