@@ -19,13 +19,26 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 
-// 2. CORS Configuration (Checklist #26: named origins, not wildcard)
+// 2. CORS Configuration (Supports configured CORS_ORIGINS, GitHub Pages, and Vercel domains)
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
 
-app.use(cors({ origin: allowedOrigins }))
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    const isAllowed = allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('github.io')
+    if (isAllowed) {
+      return callback(null, true)
+    }
+    return callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true
+}))
 app.use(express.json({ limit: '100kb' }))
 
 // 3. Rate Limiting Middleware (Brute-force & DoS Defense)
