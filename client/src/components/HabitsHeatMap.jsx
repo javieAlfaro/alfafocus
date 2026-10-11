@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Flame, Clock, CheckCircle2, TrendingUp, Droplets, BookOpen, 
-  Award, Download, Plus, Trash2, PieChart, Sparkles 
+  Award, Download, Plus, Trash2, PieChart, Sparkles, ChevronDown, Info 
 } from 'lucide-react';
 import { calculateUserStreak } from '../utils/streak';
 
@@ -69,33 +69,169 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
     if (onShowToast) onShowToast('Habit removed', 'info');
   };
 
-  // Generate 12 weeks of heatmap data (84 days) strictly from real sessions
-  const today = new Date();
-  const heatMapDays = Array.from({ length: 84 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - (83 - i));
-    const dateStr = d.toISOString().split('T')[0];
-    
-    // Check real sessions for this date
-    const daySessions = sessions.filter(s => s.completed_at?.startsWith(dateStr));
-    const minutes = daySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+  // GitHub-style Calendar State
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [intensityMetric, setIntensityMetric] = useState('focus'); // 'focus' | 'tasks'
+  const [showMetricDropdown, setShowMetricDropdown] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [hoveredDay, setHoveredDay] = useState(null);
 
-    let level = 0;
-    if (minutes > 60) level = 4;
-    else if (minutes > 40) level = 3;
-    else if (minutes > 20) level = 2;
-    else if (minutes > 0) level = 1;
+  const availableYears = [currentYear, currentYear - 1, currentYear - 2];
 
-    return { date: dateStr, minutes, level };
-  });
+  // Helper to format local date YYYY-MM-DD
+  const toLocalDateKey = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  const getTileColor = (level) => {
+  const formatLongDate = (d) => {
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Generate 53 weeks (~371 days) of calendar data strictly from real sessions and tasks
+  const { weeks, monthLabels, yearFocusMinutes, yearSessionsCount, yearTasksCount } = useMemo(() => {
+    const now = new Date();
+    const isCurrentYear = selectedYear === currentYear;
+
+    let startDate;
+    if (isCurrentYear) {
+      // Rolling 52 weeks ending on the current week's Saturday
+      const currentDayOfWeek = now.getDay(); // 0 = Sun, 6 = Sat
+      const thisSunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - currentDayOfWeek);
+      startDate = new Date(thisSunday.getFullYear(), thisSunday.getMonth(), thisSunday.getDate() - (52 * 7));
+    } else {
+      // Past calendar year: Sunday on or before Jan 1
+      const firstDay = new Date(selectedYear, 0, 1);
+      const startDayOfWeek = firstDay.getDay();
+      startDate = new Date(selectedYear, 0, 1 - startDayOfWeek);
+    }
+
+    const calculatedWeeks = [];
+    let curr = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    let totalMins = 0;
+    let totalSessions = 0;
+    let totalTasks = 0;
+
+    for (let w = 0; w < 53; w++) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        const dateObj = new Date(curr);
+        const dateStr = toLocalDateKey(dateObj);
+        const isFuture = isCurrentYear && dateObj > now;
+        const isOutsideYear = !isCurrentYear && dateObj.getFullYear() !== selectedYear;
+
+        // Check real sessions for this date
+        const daySessions = sessions.filter(s => (s.completed_at || s.created_at || '').startsWith(dateStr));
+        const minutes = daySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+        const sessionCount = daySessions.length;
+
+        // Check completed tasks for this date
+        const dayTasks = tasks.filter(t => t.completed && ((t.completed_at || '').startsWith(dateStr) || (!t.completed_at && t.due_date === dateStr)));
+        const tasksCount = dayTasks.length;
+
+        if (!isFuture && !isOutsideYear) {
+          totalMins += minutes;
+          totalSessions += sessionCount;
+          totalTasks += tasksCount;
+        }
+
+        let level = 0;
+        if (intensityMetric === 'focus') {
+          if (minutes > 90) level = 4;
+          else if (minutes > 50) level = 3;
+          else if (minutes > 25) level = 2;
+          else if (minutes > 0) level = 1;
+        } else {
+          if (tasksCount >= 5) level = 4;
+          else if (tasksCount >= 3) level = 3;
+          else if (tasksCount >= 2) level = 2;
+          else if (tasksCount >= 1) level = 1;
+        }
+
+        const formattedDate = formatLongDate(dateObj);
+        let statusSummary = '';
+        if (isFuture) {
+          statusSummary = `${formattedDate} (Upcoming)`;
+        } else if (minutes > 0 || tasksCount > 0) {
+          statusSummary = `${formattedDate}: ${minutes}m focused (${sessionCount} session${sessionCount !== 1 ? 's' : ''}) · ${tasksCount} task${tasksCount !== 1 ? 's' : ''} completed`;
+        } else {
+          statusSummary = `No activity on ${formattedDate}`;
+        }
+
+        week.push({
+          dateObj,
+          dateStr,
+          dayOfWeek: d,
+          isFuture,
+          isOutsideYear,
+          minutes,
+          sessionCount,
+          tasksCount,
+          level,
+          formattedDate,
+          statusSummary
+        });
+
+        curr.setDate(curr.getDate() + 1);
+      }
+      calculatedWeeks.push(week);
+    }
+
+    // Calculate month labels aligned to week columns
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const labels = [];
+    let prevMonth = -1;
+    let prevCol = -99;
+
+    calculatedWeeks.forEach((week, colIdx) => {
+      // Find if day 1 of a month falls in this week, or if first column
+      const firstOfMonth = week.find(day => day.dateObj.getDate() === 1 && !day.isOutsideYear);
+      if (firstOfMonth) {
+        const m = firstOfMonth.dateObj.getMonth();
+        if (colIdx - prevCol >= 2) {
+          labels.push({ colIndex: colIdx, label: monthNames[m] });
+          prevCol = colIdx;
+          prevMonth = m;
+        }
+      } else if (colIdx === 0) {
+        const validDay = week.find(day => !day.isOutsideYear) || week[0];
+        const m = validDay.dateObj.getMonth();
+        labels.push({ colIndex: 0, label: monthNames[m] });
+        prevCol = 0;
+        prevMonth = m;
+      }
+    });
+
+    return {
+      weeks: calculatedWeeks,
+      monthLabels: labels,
+      yearFocusMinutes: totalMins,
+      yearSessionsCount: totalSessions,
+      yearTasksCount: totalTasks
+    };
+  }, [selectedYear, currentYear, sessions, tasks, intensityMetric]);
+
+  const yearFocusHours = (yearFocusMinutes / 60).toFixed(1);
+
+  // GitHub dark theme tile coloring
+  const getTileColor = (level, isFuture, isOutsideYear) => {
+    if (isFuture || isOutsideYear) {
+      return 'bg-zinc-900/30 border border-zinc-800/30 opacity-20 cursor-default';
+    }
     switch (level) {
-      case 4: return 'bg-[#22C55E]'; // Green 500
-      case 3: return 'bg-[#10B981]'; // Emerald 500
-      case 2: return 'bg-[#059669]'; // Emerald 600
-      case 1: return 'bg-[#064E3B]'; // Emerald 900
-      default: return 'bg-[#18181B] border border-zinc-800/80';
+      case 4: return 'bg-[#39d353] border border-[#39d353]/30 shadow-[0_0_8px_rgba(57,211,83,0.35)]'; // Bright neon green
+      case 3: return 'bg-[#26a641] border border-[#26a641]/30'; // Vibrant green
+      case 2: return 'bg-[#006d32] border border-[#006d32]/30'; // Medium-dark green
+      case 1: return 'bg-[#0e4429] border border-[#0e4429]/30'; // Deep emerald green
+      default: return 'bg-[#161b22] border border-[#21262d]/60'; // GitHub empty square
     }
   };
 
@@ -244,50 +380,201 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
       </div>
 
       {/* GitHub-Style Focus Intensity Heat Map Card */}
-      <div className="p-6 rounded-2xl bg-[#18181B] border border-zinc-800 mb-8">
-        <div className="flex justify-between items-center mb-6">
+      <section className="mb-8">
+        {/* Top Header: Total Year Contributions & Settings Dropdown */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
           <div>
-            <h2 className="text-base font-semibold text-white">Focus Intensity</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">Last 12 Weeks (84 Days of Activity)</p>
+            <h2 className="text-lg font-semibold text-white tracking-tight flex items-center gap-2">
+              {intensityMetric === 'focus' 
+                ? `${yearFocusHours} hours focused in the ${selectedYear === currentYear ? 'last year' : selectedYear}`
+                : `${yearTasksCount} tasks completed in the ${selectedYear === currentYear ? 'last year' : selectedYear}`
+              }
+            </h2>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {yearSessionsCount} focus sessions recorded · {yearTasksCount} completed tasks
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span>Less</span>
-            <div className="flex gap-1">
-              <span className="w-3 h-3 rounded-sm bg-[#18181B] border border-zinc-800"></span>
-              <span className="w-3 h-3 rounded-sm bg-[#064E3B]"></span>
-              <span className="w-3 h-3 rounded-sm bg-[#059669]"></span>
-              <span className="w-3 h-3 rounded-sm bg-[#10B981]"></span>
-              <span className="w-3 h-3 rounded-sm bg-[#22C55E]"></span>
-            </div>
-            <span>More</span>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMetricDropdown(!showMetricDropdown)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] text-zinc-300 hover:text-white border border-zinc-800 text-xs font-medium transition"
+            >
+              <span>Contribution settings</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMetricDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showMetricDropdown && (
+              <div className="absolute right-0 mt-2 w-60 p-2 bg-[#161b22] border border-zinc-700/80 rounded-xl shadow-2xl z-30 text-xs">
+                <div className="text-[10px] font-semibold text-zinc-400 px-2 py-1 uppercase tracking-wider">
+                  Color Intensity Metric
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setIntensityMetric('focus'); setShowMetricDropdown(false); }}
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition ${
+                    intensityMetric === 'focus' 
+                      ? 'bg-emerald-950/80 text-emerald-300 font-semibold border border-emerald-800/40' 
+                      : 'text-zinc-300 hover:bg-zinc-800/80'
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold">Focus Time (Default)</p>
+                    <p className="text-[10px] text-zinc-400">Measures deep work duration</p>
+                  </div>
+                  {intensityMetric === 'focus' && <span className="text-emerald-400">✓</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIntensityMetric('tasks'); setShowMetricDropdown(false); }}
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition mt-1 ${
+                    intensityMetric === 'tasks' 
+                      ? 'bg-emerald-950/80 text-emerald-300 font-semibold border border-emerald-800/40' 
+                      : 'text-zinc-300 hover:bg-zinc-800/80'
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold">Tasks Completed</p>
+                    <p className="text-[10px] text-zinc-400">Measures volume of tasks done</p>
+                  </div>
+                  {intensityMetric === 'tasks' && <span className="text-emerald-400">✓</span>}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* The 12-Week Grid */}
-        <div className="overflow-x-auto pb-2">
-          <div className="flex gap-1.5 items-start">
-            <div className="grid grid-rows-7 gap-1.5 text-[10px] text-zinc-500 pr-2 pt-0.5">
-              <span>Mon</span>
-              <span></span>
-              <span>Wed</span>
-              <span></span>
-              <span>Fri</span>
-              <span></span>
-              <span>Sun</span>
+        {/* Calendar Card and Year Buttons Row */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          {/* Main GitHub Calendar Box */}
+          <div className="flex-1 w-full p-4 sm:p-5 rounded-xl bg-[#0d1117] border border-zinc-800 shadow-sm overflow-hidden">
+            
+            {/* Live Hover Status */}
+            <div className="h-5 mb-2 text-xs text-zinc-400 flex items-center">
+              {hoveredDay ? (
+                <span className="text-zinc-200 font-medium">
+                  {hoveredDay.statusSummary}
+                </span>
+              ) : (
+                <span className="text-zinc-500">
+                  Hover over a day square to view activity details
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-flow-col grid-rows-7 gap-1.5">
-              {heatMapDays.map((day, idx) => (
-                <div
-                  key={idx}
-                  title={`${day.date}: ${day.minutes}m focus`}
-                  className={`w-3.5 h-3.5 rounded-sm transition-transform hover:scale-125 cursor-pointer ${getTileColor(day.level)}`}
-                ></div>
-              ))}
+            {/* Scrollable 53-week Grid */}
+            <div className="overflow-x-auto pb-1">
+              <div className="inline-flex flex-col min-w-max">
+                {/* Month labels on X-axis */}
+                <div className="relative h-5 ml-8 text-[11px] text-zinc-400 select-none">
+                  {monthLabels.map(({ colIndex, label }, idx) => (
+                    <span
+                      key={`${label}-${colIndex}-${idx}`}
+                      className="absolute top-0"
+                      style={{ left: `${colIndex * 14}px` }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Day labels and Squares Grid */}
+                <div className="flex gap-[3px]">
+                  {/* Day labels column on Y-axis */}
+                  <div className="flex flex-col gap-[3px] text-[10px] text-zinc-500 w-8 select-none pt-0.5">
+                    <span className="h-[11px] leading-[11px]"></span>
+                    <span className="h-[11px] leading-[11px]">Mon</span>
+                    <span className="h-[11px] leading-[11px]"></span>
+                    <span className="h-[11px] leading-[11px]">Wed</span>
+                    <span className="h-[11px] leading-[11px]"></span>
+                    <span className="h-[11px] leading-[11px]">Fri</span>
+                    <span className="h-[11px] leading-[11px]"></span>
+                  </div>
+
+                  {/* 53 Columns */}
+                  <div className="flex gap-[3px]">
+                    {weeks.map((week, colIdx) => (
+                      <div key={colIdx} className="flex flex-col gap-[3px]">
+                        {week.map((day) => (
+                          <div
+                            key={day.dateStr}
+                            onMouseEnter={() => setHoveredDay(day)}
+                            onMouseLeave={() => setHoveredDay(null)}
+                            title={day.isFuture ? `${day.formattedDate} (Upcoming)` : day.statusSummary}
+                            className={`w-[11px] h-[11px] rounded-[2px] transition-transform hover:scale-125 cursor-pointer ${getTileColor(day.level, day.isFuture, day.isOutsideYear)}`}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Bottom Row inside Box: Learn Link & Legend */}
+            <div className="mt-4 pt-3 border-t border-zinc-800/60 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
+              <button
+                type="button"
+                onClick={() => setShowInfoModal(!showInfoModal)}
+                className="text-zinc-400 hover:text-emerald-400 text-[11px] flex items-center gap-1.5 transition"
+              >
+                <Info className="w-3.5 h-3.5" />
+                <span>Learn how we measure focus intensity</span>
+              </button>
+
+              <div className="flex items-center gap-2 text-[11px] text-zinc-400 select-none">
+                <span>Less</span>
+                <div className="flex gap-[3px]">
+                  <span className="w-[11px] h-[11px] rounded-[2px] bg-[#161b22] border border-[#21262d]/60" title="Level 0: No activity"></span>
+                  <span className="w-[11px] h-[11px] rounded-[2px] bg-[#0e4429]" title="Level 1: 1–25m focus"></span>
+                  <span className="w-[11px] h-[11px] rounded-[2px] bg-[#006d32]" title="Level 2: 26–50m focus"></span>
+                  <span className="w-[11px] h-[11px] rounded-[2px] bg-[#26a641]" title="Level 3: 51–90m focus"></span>
+                  <span className="w-[11px] h-[11px] rounded-[2px] bg-[#39d353]" title="Level 4: 90+ mins focus"></span>
+                </div>
+                <span>More</span>
+              </div>
+            </div>
+
+            {/* Collapsible Info Drawer */}
+            {showInfoModal && (
+              <div className="mt-3 p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-xs text-zinc-300 space-y-1.5">
+                <p className="font-semibold text-white">Focus Intensity Calibration:</p>
+                <p className="text-zinc-400 text-[11px]">
+                  {intensityMetric === 'focus' 
+                    ? 'Square colors represent focused deep work minutes logged across Pomodoro and Stopwatch sessions: Level 1 (1–25m), Level 2 (26–50m), Level 3 (51–90m), Level 4 (>90m).'
+                    : 'Square colors represent tasks checked off on that day: Level 1 (1 task), Level 2 (2 tasks), Level 3 (3–4 tasks), Level 4 (5+ tasks).'
+                  }
+                </p>
+                <p className="text-[11px] text-emerald-400 font-medium">
+                  Hovering any square displays both your focused time and completed task count for that day.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* GitHub-Style Vertical Year Selector Column on the Right */}
+          <div className="flex flex-row lg:flex-col gap-2 shrink-0 self-start">
+            {availableYears.map(yr => {
+              const isActive = selectedYear === yr;
+              return (
+                <button
+                  key={yr}
+                  type="button"
+                  onClick={() => setSelectedYear(yr)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition text-left min-w-[70px] ${
+                    isActive 
+                      ? 'bg-[#1f6feb] text-white shadow-sm' 
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/80 bg-[#161b22] border border-zinc-800/60'
+                  }`}
+                >
+                  {yr}
+                </button>
+              );
+            })}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Bottom Grid: Category Time Breakdown & Habit Routines */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
