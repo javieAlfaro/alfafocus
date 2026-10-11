@@ -174,13 +174,14 @@ export default function App() {
   // Shared task creation handler
   const handleAddTask = async (newTaskData) => {
     const tempId = 'temp-' + Date.now();
+    const resolvedListId = newTaskData.list_id || (lists[0]?.id || null);
     const optimisticTask = {
       id: tempId,
       title: newTaskData.title,
       category: newTaskData.category || 'WORK',
       priority: newTaskData.priority || 'medium',
       due_date: newTaskData.due_date || null,
-      list_id: newTaskData.list_id || (lists[0]?.id || 1),
+      list_id: resolvedListId,
       parent_task_id: newTaskData.parent_task_id || null,
       progress: 0,
       completed: false,
@@ -190,7 +191,7 @@ export default function App() {
     setTasks(prev => [optimisticTask, ...prev]);
 
     try {
-      const created = await createTask(newTaskData);
+      const created = await createTask({ ...newTaskData, list_id: resolvedListId });
       setTasks(prev => prev.map(t => t.id === tempId ? created : t));
       showToast('Task created successfully', 'success');
     } catch {

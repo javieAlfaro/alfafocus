@@ -75,9 +75,10 @@ export default function ProjectBreakdown({
   const handleCreateRootTask = (e) => {
     e?.preventDefault();
     if (!newTaskTitle.trim()) return;
+    const targetId = selectedListId || (activeList?.id || (lists[0]?.id || null));
     onAddTask({
       title: newTaskTitle.trim(),
-      list_id: selectedListId,
+      list_id: targetId,
       priority: newTaskPriority,
       category: newTaskCategory,
       due_date: newTaskDueDate || null,
@@ -89,10 +90,11 @@ export default function ProjectBreakdown({
 
   const handleAddSubtask = (parentId) => {
     if (!newSubtaskTitle.trim()) return;
+    const targetId = selectedListId || (activeList?.id || (lists[0]?.id || null));
     onAddTask({
       title: newSubtaskTitle.trim(),
       parent_task_id: parentId,
-      list_id: selectedListId,
+      list_id: targetId,
       category: activeList?.title?.toUpperCase() || 'WORK',
       priority: 'medium',
     });

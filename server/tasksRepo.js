@@ -147,11 +147,35 @@ export async function getTaskById(pool, id) {
 }
 
 export async function createTask(pool, { title, category, priority, due_date, list_id, parent_task_id }, userId = 1) {
+  let targetListId = list_id ? Number(list_id) : null
+
+  // If list_id was provided, ensure it actually exists in task_lists
+  if (targetListId) {
+    const listCheck = await pool.query('SELECT id FROM task_lists WHERE id = $1', [targetListId])
+    if (listCheck.rows.length === 0) {
+      targetListId = null
+    }
+  }
+
+  // If no valid list_id, resolve the user's first list or auto-create a default list
+  if (!targetListId && userId) {
+    const userLists = await pool.query('SELECT id FROM task_lists WHERE user_id = $1 ORDER BY id ASC LIMIT 1', [userId])
+    if (userLists.rows.length > 0) {
+      targetListId = userLists.rows[0].id
+    } else {
+      const defaultList = await pool.query(
+        'INSERT INTO task_lists (user_id, title, color) VALUES ($1, $2, $3) RETURNING id',
+        [userId, 'My Tasks', '#059669']
+      )
+      targetListId = defaultList.rows[0].id
+    }
+  }
+
   const result = await pool.query(
     `INSERT INTO tasks (title, category, priority, due_date, list_id, parent_task_id, user_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [title, category || 'WORK', priority || 'medium', due_date || null, list_id || 1, parent_task_id || null, userId || 1]
+    [title, category || 'WORK', priority || 'medium', due_date || null, targetListId, parent_task_id || null, userId || 1]
   )
   return result.rows[0]
 }
