@@ -4,7 +4,8 @@
 
 > Built with the assistance of **Antigravity (Google DeepMind)**, adhering to the course AI policy with $\ge 20\%$ self-authored code. See the full disclosure and commit references in [AI-USAGE.md](AI-USAGE.md).
 
-**Live site:** https://javiealfaro.github.io/alfafocus/  
+**Live Website (Primary):** https://alfafocus.vercel.app  
+**Live Website (Mirror):** https://javiealfaro.github.io/alfafocus/  
 **API:** https://alfafocus-api.onrender.com/healthz  
 **Demo video:** *(Week 3 Submission)*
 
