@@ -2,14 +2,14 @@
 
 [![Made with AI](https://img.shields.io/badge/Made_with-AI_assistance-blue)](AI-USAGE.md)
 
-> Built with the assistance of **Antigravity (Google DeepMind)**, adhering to the course AI policy with $\ge 20\%$ self-authored code. See the full disclosure and commit references in [AI-USAGE.md](AI-USAGE.md).
+> Built with the assistance of **Antigravity (Google DeepMind)** and **Codex (OpenAI)**. The project follows the course AI policy with $\ge 20\%$ self-authored code. See the full disclosure and commit references in [AI-USAGE.md](AI-USAGE.md).
 
 **Live Website (Primary):** https://alfafocus.vercel.app  
-**Live Website (Mirror):** https://javiealfaro.github.io/alfafocus/  
+**GitHub Pages (Mirror):** [Deployment status](https://github.com/javieAlfaro/alfafocus/actions/workflows/deploy-pages.yml). The [mirror URL](https://javiealfaro.github.io/alfafocus/) redirects to `javiealfaro.me`. Use the primary link to open the app.\
 **API:** https://alfafocus-api.onrender.com/healthz  
 **Demo video:** *(Week 3 Submission)*
 
-> **Live Authentication & Backend Active:** Demo mode is disabled. The application is connected to the live Express API on Render and PostgreSQL on Supabase, featuring user registration, JWT session management, and isolated workspaces.
+> **Live Authentication & Backend Active:** The production client uses the Express API on Render and PostgreSQL on Supabase for user registration, JWT sessions, and isolated workspaces. Local demo mode is available with `VITE_USE_MOCK_API=true`.
 
 ---
 
@@ -71,7 +71,7 @@ cp .env.example .env
 | `VITE_USE_MOCK_API` | `client/.env` | `true` | Set to `true` for browser storage or `false` for the live API. Unset uses the live API. |
 | `VITE_API_BASE_URL` | `client/.env` | `http://localhost:3000` | Base URL of the Express backend API. |
 | `DATABASE_URL` | `server/.env` | `postgres://user:password@localhost:5432/alfafocus` | PostgreSQL connection string (Supabase URI in production). |
-| `JWT_SECRET` | `server/.env` | A long random value | Required in production to sign live workspace sessions. |
+| `JWT_SECRET` | `server/.env` or Render secret file | A long random value | Required in production to sign workspace sessions. On Render, the backend can read a secret file named `JWT_SECRET` at runtime. |
 | `CORS_ORIGINS` | `server/.env` | `http://localhost:5173,https://javiealfaro.github.io` | Comma-separated list of allowed origins. |
 | `PORT` | `server/.env` | `3000` | Port the Express server listens on (assigned by host in production). |
 
@@ -196,38 +196,33 @@ alfafocus/
 ## 6. Screenshots
 
 ### Figure 1: Today & Focus Hub View
-![AlfaFocus Today and Focus Hub Dashboard](docs/assets/screenshot.svg)
-*Featuring persistent sidebar navigation, streak stats, quick-add task checklist, and active circular Pomodoro timer.*
+![AlfaFocus Today and Focus Hub Dashboard](docs/assets/screenshot.jpg)
+*Featuring overdue, due-today, and unscheduled tasks alongside the focus timer and ambient sound controls.*
 
-### Figure 2: Lists & Multi-Tier Subtask Trees
-![AlfaFocus Lists and Nested Subtasks](docs/assets/screenshot-lists.svg)
-*Featuring custom project folders (`AlfaFocus Redesign`, `Marketing Q1`), collapsible subtask trees, and dynamic parent progress calculation.*
+### Figure 2: Lists & Kanban Board
+![AlfaFocus Project Folders and Kanban Board](docs/assets/screenshot-lists.jpg)
+*Featuring project folders, a list view toggle, project progress, and the To Do, In Progress, and Completed lanes.*
 
 ### Figure 3: Calendar & Day Planner View
-![AlfaFocus Calendar and Planner](docs/assets/screenshot-calendar.svg)
-*Featuring interactive October 2026 month grid, scheduled focus block chips, today highlight, and right-hand daily agenda inspector.*
+![AlfaFocus Calendar and Planner](docs/assets/screenshot-calendar.jpg)
+*Featuring month and week views, a scheduled project task, and the Date Inspector for scheduling existing tasks and reviewing focus sessions.*
 
-### Figure 4: Habits Tracker & 12-Week Focus Heat Map
-![AlfaFocus Habits and Heat Map](docs/assets/screenshot-habits.svg)
-*Featuring 4 productivity stat cards (Streak, Focus Time, Completed Tasks, Efficiency), 84-day (12-week) GitHub-style emerald heat map, and weekly habit routine tracker.*
+### Figure 4: Habits & Year-View Focus Heat Map
+![AlfaFocus Habits and Analytics](docs/assets/screenshot-habits.jpg)
+*Featuring a year-view activity heat map, focus and task metrics, year selection, and CSV export.*
 
 ---
 
-## 7. Known issues and next steps
+## 7. Completed milestones
 
-### Current Status (Week 2 Increment Complete)
-* **Full 4-Screen Loop Delivered:** Users can seamlessly navigate between Today Focus Hub, Lists & Nested Projects, Calendar Planner, and Habits & Heat Map without page reloads.
+### Current Status (Production Release)
+* **Connected 4-Screen Workflow:** Schedule an existing project task in Calendar, start a focus session from Today, switch views while the timer runs, and review the session in Calendar or Habits & Stats.
 * **Hierarchical Subtask Trees:** Parent tasks dynamically aggregate completion percentages from child subtasks (`Math.round((completed / total) * 100)`), with collapsible chevron toggles and cascading database deletion (`ON DELETE CASCADE`).
-* **12-Week Focus Intensity Grid:** An 84-day GitHub-style heat map visualizing daily focus duration in 5 emerald color tiers, accompanied by live productivity stats and weekly habit bubbles.
-* **Month Calendar Grid:** Interactive October 2026 grid with scheduled focus blocks and a detailed date inspector panel for deep planning.
-* **Live Supabase PostgreSQL Database:** Successfully provisioned Supabase PostgreSQL via an IPv4 session pooler with parameterized queries, schema migrations, and seed data.
+* **Kanban & Recurring Tasks:** Move cards between saved board lanes and schedule standalone tasks to repeat daily, on weekdays, or weekly.
+* **Focus Timer & Audio:** Use Pomodoro, Deep Work, or Stopwatch with ambient sound controls shared across views.
+* **Focus Intensity Grid:** A year-view heat map shows daily focus activity. Select a day to review it in Calendar.
+* **Live Deployment:** The primary client is on Vercel, the API is on Render, and the Supabase schema upgrade is applied. GitHub Actions runs the client and server checks before publishing the Pages build.
 * **Security & Auditing:** Completed and verified all 31 checks in [`SECURITY-CHECKLIST.md`](../project/SECURITY-CHECKLIST.md) (git secret scans, CORS named origins, input sanitization, app-level password gate).
-
-### Next Steps for Week 3 (Final Increment & Presentation)
-1. Deploy the Express REST API server to **Render** with production environment variables (`DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS`).
-2. Point the production client on GitHub Pages to the live Render API (`VITE_USE_MOCK_API=false`).
-3. Record the 3–5 minute final walkthrough presentation video demonstrating core workflows, responsive UI, database persistence, and security controls.
-4. Prepare the final slide deck and generate the required 1080x1080 promo square graphic for course submission.
 
 ---
 
