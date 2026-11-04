@@ -36,16 +36,21 @@ export function saveStoredAudioSettings(settings) {
 
 let sharedAudioCtx = null;
 function getAudioContext() {
-  if (!sharedAudioCtx) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioContextClass) {
-      sharedAudioCtx = new AudioContextClass();
+  if (typeof window === 'undefined') return null;
+  try {
+    if (!sharedAudioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) sharedAudioCtx = new AudioContextClass();
     }
+    if (sharedAudioCtx?.state === 'suspended') sharedAudioCtx.resume().catch(() => {});
+    return sharedAudioCtx;
+  } catch {
+    return null;
   }
-  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
-    sharedAudioCtx.resume().catch(() => {});
-  }
-  return sharedAudioCtx;
+}
+
+export function prepareAudio() {
+  getAudioContext();
 }
 
 /**
@@ -61,7 +66,7 @@ export function playSynthesizedChime(type = 'bell', volume = 0.7) {
 
   const now = ctx.currentTime;
   const masterGain = ctx.createGain();
-  masterGain.gain.setValueAtTime(Math.max(0.01, Math.min(1.0, volume)), now);
+  masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), now);
   masterGain.connect(ctx.destination);
 
   if (type === 'bell') {
@@ -171,33 +176,24 @@ let activeAmbientNodes = null;
 let currentAmbientType = 'none';
 
 export function stopAmbientSound() {
-  if (activeAmbientNodes) {
-    try {
-      if (activeAmbientNodes.stop) activeAmbientNodes.stop();
-      if (activeAmbientNodes.nodes) {
-        activeAmbientNodes.nodes.forEach(n => {
-          if (n.stop) try { n.stop(); } catch(e){}
-          if (n.disconnect) try { n.disconnect(); } catch(e){}
-        });
-      }
-    } catch (e) {
-      // Ignore audio teardown errors
-    }
-    activeAmbientNodes = null;
+  for (const node of activeAmbientNodes?.nodes ?? []) {
+    try { node.stop?.(); } catch {}
+    try { node.disconnect?.(); } catch {}
   }
+  activeAmbientNodes = null;
   currentAmbientType = 'none';
 }
 
 export function startAmbientSound(type = 'whitenoise', volume = 0.3) {
   stopAmbientSound();
-  if (type === 'none' || volume <= 0) return;
+  if (!['whitenoise', 'rain', 'binaural'].includes(type)) return;
 
   const ctx = getAudioContext();
   if (!ctx) return;
 
   const now = ctx.currentTime;
   const masterGain = ctx.createGain();
-  masterGain.gain.setValueAtTime(Math.max(0.01, Math.min(1.0, volume)), now);
+  masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), now);
   masterGain.connect(ctx.destination);
 
   const cleanupNodes = [masterGain];
@@ -227,9 +223,6 @@ export function startAmbientSound(type = 'whitenoise', volume = 0.3) {
     activeAmbientNodes = {
       gainNode: masterGain,
       nodes: cleanupNodes,
-      stop: () => {
-        try { whiteNoiseSource.stop(); } catch(e){}
-      }
     };
     currentAmbientType = 'whitenoise';
   } else if (type === 'rain') {
@@ -260,9 +253,6 @@ export function startAmbientSound(type = 'whitenoise', volume = 0.3) {
     activeAmbientNodes = {
       gainNode: masterGain,
       nodes: cleanupNodes,
-      stop: () => {
-        try { rainSource.stop(); } catch(e){}
-      }
     };
     currentAmbientType = 'rain';
   } else if (type === 'binaural') {
@@ -297,9 +287,6 @@ export function startAmbientSound(type = 'whitenoise', volume = 0.3) {
     activeAmbientNodes = {
       gainNode: masterGain,
       nodes: cleanupNodes,
-      stop: () => {
-        try { oscLeft.stop(); oscRight.stop(); } catch(e){}
-      }
     };
     currentAmbientType = 'binaural';
   }
@@ -309,7 +296,7 @@ export function setAmbientVolume(volume) {
   if (activeAmbientNodes && activeAmbientNodes.gainNode) {
     const ctx = getAudioContext();
     if (ctx) {
-      activeAmbientNodes.gainNode.gain.setValueAtTime(Math.max(0.01, Math.min(1.0, volume)), ctx.currentTime);
+      activeAmbientNodes.gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), ctx.currentTime);
     }
   }
 }

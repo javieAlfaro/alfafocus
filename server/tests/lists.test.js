@@ -42,18 +42,11 @@ describe('Task Lists Repository', () => {
   });
 
   it('safely deletes list and reassigns tasks to default list', async () => {
-    const mockPool = {
-      query: vi
-        .fn()
-        // First query: getListById
-        .mockResolvedValueOnce({
-          rows: [{ id: 5, user_id: 1, title: 'Archived Project', color: '#EF4444' }],
-        })
-        // Second query: update tasks to default list
-        .mockResolvedValueOnce({ rowCount: 3 })
-        // Third query: delete task_lists
-        .mockResolvedValueOnce({ rowCount: 1 }),
-    };
+    const query = vi.fn(async (sql, params) => {
+      if (sql.startsWith('SELECT * FROM task_lists')) return { rows: [{ id: params[0], user_id: 1 }] };
+      return { rowCount: 1 };
+    });
+    const mockPool = { query, connect: vi.fn(async () => ({ query, release: vi.fn() })) };
 
     const success = await deleteList(mockPool, 5, 1, 1);
     expect(success).toBe(true);
@@ -71,10 +64,8 @@ describe('Task Lists Repository', () => {
   });
 
   it('returns false when trying to delete non-existent list', async () => {
-    const mockPool = {
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-    };
-
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const mockPool = { connect: vi.fn(async () => ({ query, release: vi.fn() })) };
     const success = await deleteList(mockPool, 999, 1, 1);
     expect(success).toBe(false);
   });

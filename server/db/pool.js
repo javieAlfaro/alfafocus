@@ -1,5 +1,8 @@
 import pg from 'pg'
 
+// PostgreSQL DATE values represent calendar days without a time zone.
+pg.types.setTypeParser(1082, value => value)
+
 // Fail at boot with one clear line, rather than with a mystery 500 an hour
 // later. The commonest deployment mistake is setting a variable in .env on your
 // laptop and never setting it in the host's dashboard.

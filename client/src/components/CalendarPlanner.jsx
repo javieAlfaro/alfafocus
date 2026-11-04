@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, 
   CheckCircle2, Circle, Plus, Trash2, Tag, AlertCircle, Check 
 } from 'lucide-react';
+
+import { localDateKey, sessionDay } from '../utils/calendarDates';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -12,20 +14,31 @@ const MONTH_NAMES = [
 export default function CalendarPlanner({ 
   tasks = [], 
   sessions = [], 
-  onAddTask, 
+  onAddTask, onUpdateTask, onOpenTask, calendarTarget,
   onToggleTask, 
   onDeleteTask,
   onShowToast
 }) {
   // Dynamic current date reference
   const todayObj = new Date();
-  const todayDateStr = todayObj.toISOString().slice(0, 10);
+  const todayDateStr = localDateKey(todayObj);
 
   // Calendar viewed month: default to current month
   const [viewDate, setViewDate] = useState(() => new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDateStr, setSelectedDateStr] = useState(todayDateStr);
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
   
+  const [scheduleTaskId, setScheduleTaskId] = useState('');
+  const [scheduling, setScheduling] = useState(false);
+
+  useEffect(() => {
+    if (!calendarTarget) return;
+    const [year, month] = calendarTarget.date.split('-').map(Number);
+    setViewDate(new Date(year, month - 1, 1));
+    setSelectedDateStr(calendarTarget.date);
+    setViewMode('month');
+  }, [calendarTarget]);
+
   // Quick-add state for the inspector
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -36,18 +49,19 @@ export default function CalendarPlanner({
   const currentMonthIdx = viewDate.getMonth();
   const currentMonthName = `${MONTH_NAMES[currentMonthIdx]} ${currentYear}`;
 
-  // Calculate calendar layout
-  const firstDayOfMonth = new Date(currentYear, currentMonthIdx, 1);
-  const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
-  const startDayOffset = firstDayOfMonth.getDay(); // 0 (Sun) to 6 (Sat)
+  const selectedDay = new Date(selectedDateStr + 'T00:00:00');
+  const weekStart = new Date(selectedDay);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
 
-  // Navigate months
-  const handlePrevMonth = () => {
-    setViewDate(new Date(currentYear, currentMonthIdx - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setViewDate(new Date(currentYear, currentMonthIdx + 1, 1));
+  const shiftPeriod = offset => {
+    if (viewMode === 'month') {
+      setViewDate(new Date(currentYear, currentMonthIdx + offset, 1));
+    } else {
+      const next = new Date(selectedDay);
+      next.setDate(next.getDate() + offset * 7);
+      setSelectedDateStr(localDateKey(next));
+      setViewDate(new Date(next.getFullYear(), next.getMonth(), 1));
+    }
   };
 
   const handleGoToday = () => {
@@ -55,34 +69,29 @@ export default function CalendarPlanner({
     setSelectedDateStr(todayDateStr);
   };
 
-  // Build Month cells
-  const calendarCells = [];
-  for (let i = 0; i < startDayOffset; i++) {
-    calendarCells.push({ empty: true, key: `pad-${i}` });
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${currentYear}-${String(currentMonthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayTasks = tasks.filter(t => t.due_date === dateStr || (!t.due_date && dateStr === todayDateStr));
-    const daySessions = sessions.filter(s => s.completed_at?.startsWith(dateStr));
-    
-    calendarCells.push({
-      empty: false,
-      day,
+  const buildDay = date => {
+    const dateStr = localDateKey(date);
+    return {
+      day: date.getDate(),
       dateStr,
-      tasks: dayTasks,
-      sessions: daySessions,
+      key: dateStr,
       isToday: dateStr === todayDateStr,
-      isSelected: dateStr === selectedDateStr,
-      key: `day-${dateStr}`
-    });
-  }
-
-  // Selected date details
-  const selectedDayCell = calendarCells.find(c => !c.empty && c.dateStr === selectedDateStr) || {
-    tasks: tasks.filter(t => t.due_date === selectedDateStr),
-    sessions: sessions.filter(s => s.completed_at?.startsWith(selectedDateStr)),
+      tasks: tasks.filter(task => task.due_date === dateStr),
+      sessions: sessions.filter(session => sessionDay(session) === dateStr),
+    };
   };
+
+  const monthPadding = Array.from({ length: new Date(currentYear, currentMonthIdx, 1).getDay() },
+    (_, index) => ({ empty: true, key: 'pad-' + index }));
+  const monthDays = Array.from({ length: new Date(currentYear, currentMonthIdx + 1, 0).getDate() },
+    (_, index) => buildDay(new Date(currentYear, currentMonthIdx, index + 1)));
+  const calendarCells = [...monthPadding, ...monthDays];
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + index);
+    return buildDay(date);
+  });
+  const selectedDayCell = buildDay(selectedDay);
 
   const selectedDateObj = new Date(selectedDateStr + 'T00:00:00');
   const formattedSelectedDate = selectedDateObj.toLocaleDateString('en-US', {
@@ -93,42 +102,52 @@ export default function CalendarPlanner({
   });
 
   // Handle Quick Add for selected date
-  const handleQuickAdd = (e) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-    if (onAddTask) {
-      onAddTask({
-        title: newTaskTitle.trim(),
-        category: newTaskCategory,
-        priority: newTaskPriority,
-        due_date: selectedDateStr,
-      });
-      if (onShowToast) onShowToast(`Task scheduled for ${selectedDateStr}`, 'success');
+  const handleQuickAdd = async event => {
+    event.preventDefault();
+    if (!newTaskTitle.trim() || !onAddTask) return;
+    const saved = await onAddTask({
+      title: newTaskTitle.trim(), category: newTaskCategory,
+      priority: newTaskPriority, due_date: selectedDateStr,
+    });
+    if (saved) {
+      setNewTaskTitle('');
+      setIsAddingTask(false);
     }
-    setNewTaskTitle('');
-    setIsAddingTask(false);
+  };
+
+  const handleScheduleExisting = async event => {
+    event.preventDefault();
+    const task = tasks.find(row => String(row.id) === scheduleTaskId);
+    if (!task || scheduling) return;
+    setScheduling(true);
+    const saved = await onUpdateTask(task.id, { due_date: selectedDateStr });
+    setScheduling(false);
+    if (saved) {
+      setScheduleTaskId('');
+      onShowToast?.('Scheduled for ' + formattedSelectedDate);
+    }
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#09090B] text-[#FAFAFA]">
+    <div className="flex min-w-0 flex-1 flex-col bg-[#09090B] xl:flex-row xl:overflow-hidden text-[#FAFAFA]">
       
       {/* Main Calendar View Area */}
-      <main className="flex-1 p-8 overflow-y-auto flex flex-col">
+      <main className="min-w-0 flex-1 overflow-auto p-4 xl:p-8 flex flex-col">
         {/* Header Controls */}
-        <header className="mb-6 flex justify-between items-center">
+        <header className="mb-6 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold tracking-tight text-white">{currentMonthName}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">{viewMode === 'week' ? 'Week of ' + weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : currentMonthName}</h1>
             <div className="flex items-center gap-1 bg-[#18181B] border border-zinc-800 rounded-lg p-1">
               <button 
-                onClick={handlePrevMonth}
-                aria-label="Previous month"
+                onClick={() => shiftPeriod(-1)}
+                aria-label={'Previous ' + viewMode}
                 className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button 
-                onClick={handleNextMonth}
-                aria-label="Next month"
+                onClick={() => shiftPeriod(1)}
+                aria-label={'Next ' + viewMode}
                 className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -155,7 +174,12 @@ export default function CalendarPlanner({
               Month
             </button>
             <button 
-              onClick={() => setViewMode('week')}
+              onClick={() => {
+                if (currentYear !== selectedDay.getFullYear() || currentMonthIdx !== selectedDay.getMonth()) {
+                  setSelectedDateStr(localDateKey(viewDate));
+                }
+                setViewMode('week');
+              }}
               className={`px-3 py-1 font-semibold rounded-lg transition ${
                 viewMode === 'week' 
                   ? 'bg-emerald-600 text-white shadow-sm' 
@@ -259,8 +283,8 @@ export default function CalendarPlanner({
           </>
         ) : (
           /* Week View Mode */
-          <div className="grid grid-cols-7 gap-3 flex-1">
-            {calendarCells.filter(c => !c.empty).slice(0, 7).map((cell) => {
+          <div className="grid min-w-[550px] grid-cols-7 gap-3 flex-1">
+            {weekDays.map((cell) => {
               const isSelected = cell.dateStr === selectedDateStr;
               return (
                 <div 
@@ -305,7 +329,7 @@ export default function CalendarPlanner({
       </main>
 
       {/* Right Selected Date Inspector Panel */}
-      <aside className="w-80 border-l border-zinc-800 bg-[#09090B] p-6 flex flex-col justify-between overflow-y-auto">
+      <aside className="flex w-full shrink-0 flex-col justify-between border-t border-zinc-800 bg-[#09090B] p-4 xl:w-80 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:p-6">
         <div>
           {/* Header */}
           <div className="mb-6">
@@ -374,6 +398,25 @@ export default function CalendarPlanner({
             </button>
           )}
 
+          {onUpdateTask && tasks.some(task => !task.completed && task.due_date !== selectedDateStr) && (
+            <form onSubmit={handleScheduleExisting} className="mb-6 space-y-2">
+              <label className="block text-xs text-zinc-400">
+                Schedule an existing task
+                <select value={scheduleTaskId} onChange={event => setScheduleTaskId(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-xs text-zinc-200">
+                  <option value="">Choose a task</option>
+                  {tasks.filter(task => !task.completed && task.due_date !== selectedDateStr).map(task => (
+                    <option key={task.id} value={String(task.id)}>{task.title}{task.due_date ? ' · ' + task.due_date : ''}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" disabled={!scheduleTaskId || scheduling}
+                className="w-full rounded-lg bg-zinc-800 p-2 text-xs text-emerald-300 disabled:opacity-50">
+                {scheduling ? 'Saving…' : 'Schedule existing task'}
+              </button>
+            </form>
+          )}
+
           {/* Tasks for this day */}
           <div className="mb-6">
             <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center justify-between">
@@ -392,7 +435,8 @@ export default function CalendarPlanner({
                   >
                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <button 
-                        onClick={() => onToggleTask && onToggleTask(task)}
+                        onClick={() => onToggleTask?.(task)}
+                        aria-label={(task.completed ? 'Reopen ' : 'Complete ') + task.title}
                         className="text-zinc-500 hover:text-emerald-400 transition shrink-0"
                       >
                         {task.completed ? (
@@ -402,15 +446,17 @@ export default function CalendarPlanner({
                         )}
                       </button>
                       <div className="truncate">
-                        <p className={`text-xs truncate ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
+                        <button type="button" onClick={() => onOpenTask?.(task.id)}
+                          className={`block max-w-full truncate text-left text-xs hover:underline ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
                           {task.title}
-                        </p>
+                        </button>
                         <span className="text-[10px] text-zinc-500">{task.category || 'WORK'}</span>
                       </div>
                     </div>
                     {onDeleteTask && (
                       <button 
                         onClick={() => onDeleteTask(task.id)}
+                        aria-label={'Delete ' + task.title}
                         className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -445,7 +491,10 @@ export default function CalendarPlanner({
                         {session.mode || 'POMODORO'}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-zinc-100">{session.task_title || 'General Focus'}</p>
+                    {tasks.some(task => task.id === session.task_id) ? (
+                      <button type="button" className="text-left text-xs font-semibold text-emerald-300 hover:underline"
+                        onClick={() => onOpenTask?.(session.task_id)}>{session.task_title || 'Focus Session'}</button>
+                    ) : <p className="text-xs font-semibold text-zinc-100">{session.task_title || 'General Focus'}</p>}
                   </div>
                 ))}
               </div>

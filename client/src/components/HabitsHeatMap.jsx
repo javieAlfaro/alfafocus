@@ -4,8 +4,9 @@ import {
   Award, Download, Plus, Trash2, PieChart, Sparkles, ChevronDown, Info 
 } from 'lucide-react';
 import { calculateUserStreak } from '../utils/streak';
+import { localDateKey, sessionDay, taskCompletionDay } from '../utils/calendarDates';
 
-export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, onShowToast }) {
+export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, onShowToast, onOpenDay }) {
   const habitsStorageKey = currentUser?.id ? `alfafocus_habits_${currentUser.id}` : 'alfafocus_habits_guest';
 
   // Habit tracking state with per-user localStorage persistence (default empty for new accounts)
@@ -80,12 +81,6 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
   const availableYears = [currentYear, currentYear - 1, currentYear - 2];
 
   // Helper to format local date YYYY-MM-DD
-  const toLocalDateKey = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
 
   const formatLongDate = (d) => {
     return d.toLocaleDateString('en-US', {
@@ -124,17 +119,17 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
       const week = [];
       for (let d = 0; d < 7; d++) {
         const dateObj = new Date(curr);
-        const dateStr = toLocalDateKey(dateObj);
+        const dateStr = localDateKey(dateObj);
         const isFuture = isCurrentYear && dateObj > now;
         const isOutsideYear = !isCurrentYear && dateObj.getFullYear() !== selectedYear;
 
         // Check real sessions for this date
-        const daySessions = sessions.filter(s => (s.completed_at || s.created_at || '').startsWith(dateStr));
+        const daySessions = sessions.filter(s => sessionDay(s) === dateStr);
         const minutes = daySessions.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
         const sessionCount = daySessions.length;
 
         // Check completed tasks for this date
-        const dayTasks = tasks.filter(t => t.completed && ((t.completed_at || '').startsWith(dateStr) || (!t.completed_at && t.due_date === dateStr)));
+        const dayTasks = tasks.filter(t => taskCompletionDay(t) === dateStr);
         const tasksCount = dayTasks.length;
 
         if (!isFuture && !isOutsideYear) {
@@ -300,7 +295,7 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `alfafocus-productivity-report-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `alfafocus-productivity-report-${localDateKey()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -497,8 +492,14 @@ export default function HabitsHeatMap({ sessions = [], tasks = [], currentUser, 
                     {weeks.map((week, colIdx) => (
                       <div key={colIdx} className="flex flex-col gap-[3px]">
                         {week.map((day) => (
-                          <div
+                          <button
+                            type="button"
                             key={day.dateStr}
+                            disabled={!onOpenDay || day.isOutsideYear}
+                            aria-label={'Open calendar for ' + day.formattedDate}
+                            onClick={() => onOpenDay?.(day.dateStr)}
+                            onFocus={() => setHoveredDay(day)}
+                            onBlur={() => setHoveredDay(null)}
                             onMouseEnter={() => setHoveredDay(day)}
                             onMouseLeave={() => setHoveredDay(null)}
                             title={day.isFuture ? `${day.formattedDate} (Upcoming)` : day.statusSummary}

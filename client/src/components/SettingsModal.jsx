@@ -7,19 +7,14 @@ import {
   getStoredAudioSettings, 
   saveStoredAudioSettings, 
   playSynthesizedChime, 
-  startAmbientSound,
-  stopAmbientSound,
-  setAmbientVolume,
-  getCurrentAmbientType,
   requestDesktopNotificationPermission,
   sendDesktopNotification
 } from '../utils/audioAlerts';
 import AlfaLogo from './AlfaLogo';
 
-export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
-  if (!isOpen) return null;
+export default function SettingsModal({ isOpen, onClose, onSaveToast, ambient }) {
 
-  const [settings, setSettings] = useState(getStoredAudioSettings());
+  const [settings, setSettings] = useState(getStoredAudioSettings);
   const [notificationPermission, setNotificationPermission] = useState(
     'Notification' in window ? Notification.permission : 'unsupported'
   );
@@ -27,7 +22,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
   const handleSoundChange = (type) => {
     const updated = { ...settings, soundType: type };
     setSettings(updated);
-    saveStoredAudioSettings(updated);
+    saveStoredAudioSettings({ ...updated, ambientSound: ambient.preset, ambientVolume: ambient.volume });
     playSynthesizedChime(type, settings.volume);
   };
 
@@ -35,30 +30,11 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
     const vol = parseFloat(e.target.value);
     const updated = { ...settings, volume: vol };
     setSettings(updated);
-    saveStoredAudioSettings(updated);
+    saveStoredAudioSettings({ ...updated, ambientSound: ambient.preset, ambientVolume: ambient.volume });
   };
 
   const handleTestSound = () => {
     playSynthesizedChime(settings.soundType, settings.volume);
-  };
-
-  const handleAmbientChange = (ambientType) => {
-    const updated = { ...settings, ambientSound: ambientType };
-    setSettings(updated);
-    saveStoredAudioSettings(updated);
-    if (ambientType === 'none') {
-      stopAmbientSound();
-    } else {
-      startAmbientSound(ambientType, settings.ambientVolume || 0.3);
-    }
-  };
-
-  const handleAmbientVolumeChange = (e) => {
-    const vol = parseFloat(e.target.value);
-    const updated = { ...settings, ambientVolume: vol };
-    setSettings(updated);
-    saveStoredAudioSettings(updated);
-    setAmbientVolume(vol);
   };
 
   const handleRequestNotifications = async () => {
@@ -67,7 +43,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
     if (result === 'granted') {
       const updated = { ...settings, notificationsEnabled: true };
       setSettings(updated);
-      saveStoredAudioSettings(updated);
+      saveStoredAudioSettings({ ...updated, ambientSound: ambient.preset, ambientVolume: ambient.volume });
       sendDesktopNotification('AlfaFocus Notifications Enabled', 'You will receive focus completion alerts even in other tabs!');
       if (onSaveToast) onSaveToast('Desktop notifications enabled!', 'success');
     } else {
@@ -82,10 +58,12 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
     } else {
       const updated = { ...settings, notificationsEnabled: enabled };
       setSettings(updated);
-      saveStoredAudioSettings(updated);
+      saveStoredAudioSettings({ ...updated, ambientSound: ambient.preset, ambientVolume: ambient.volume });
       if (onSaveToast) onSaveToast(enabled ? 'Notifications enabled' : 'Notifications disabled', 'info');
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -187,9 +165,9 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
                 Synthesized background audio to maintain deep concentration
               </p>
             </div>
-            {settings.ambientSound !== 'none' && (
+            {ambient.active !== 'none' && (
               <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse">
-                Playing
+                {ambient.volume === 0 ? 'Muted' : 'Playing'}
               </span>
             )}
           </div>
@@ -204,9 +182,10 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
               <button
                 key={option.id}
                 type="button"
-                onClick={() => handleAmbientChange(option.id)}
+                onClick={() => ambient.play(option.id)}
+                aria-pressed={ambient.active === option.id}
                 className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
-                  (settings.ambientSound || 'none') === option.id
+                  ambient.active === option.id
                     ? 'bg-emerald-950/40 border-emerald-500/80 text-white ring-1 ring-emerald-500/50'
                     : 'bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                 }`}
@@ -215,7 +194,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
                   <p className="text-xs font-semibold">{option.label}</p>
                   <p className="text-[10px] text-zinc-500">{option.desc}</p>
                 </div>
-                {(settings.ambientSound || 'none') === option.id && (
+                {ambient.active === option.id && (
                   <Check className="w-4 h-4 text-emerald-400" />
                 )}
               </button>
@@ -223,19 +202,20 @@ export default function SettingsModal({ isOpen, onClose, onSaveToast }) {
           </div>
 
           {/* Ambient Volume Slider */}
-          {settings.ambientSound !== 'none' && (
+          {(ambient.active !== 'none' || ambient.volume === 0) && (
             <div className="space-y-1.5 pt-1">
               <div className="flex justify-between text-xs text-zinc-400 font-medium">
                 <span>Ambient Volume</span>
-                <span className="font-mono text-emerald-400">{Math.round((settings.ambientVolume ?? 0.3) * 100)}%</span>
+                <span className="font-mono text-emerald-400">{Math.round((ambient.volume) * 100)}%</span>
               </div>
               <input 
                 type="range"
-                min="0.05"
+                min="0"
                 max="0.8"
                 step="0.05"
-                value={settings.ambientVolume ?? 0.3}
-                onChange={handleAmbientVolumeChange}
+                value={ambient.volume}
+                aria-label="Ambient volume"
+                onChange={event => ambient.changeVolume(Number(event.target.value))}
                 className="w-full accent-emerald-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
               />
             </div>

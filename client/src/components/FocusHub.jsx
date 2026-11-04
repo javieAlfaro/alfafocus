@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle2, Circle, Play, Pause, RotateCcw, 
   Plus, Trash2, Clock, AlertCircle, Settings, Radio,
   Target, Trophy, Sparkles, Search, Filter, X 
 } from 'lucide-react';
-import { useTimer, TIMER_MODES } from '../hooks/useTimer';
-import { 
-  getStoredAudioSettings, 
-  startAmbientSound, 
-  stopAmbientSound 
-} from '../utils/audioAlerts';
+import { TIMER_MODES } from '../hooks/useTimer';
+import { localDateKey, sessionDay, taskCompletionDay } from '../utils/calendarDates';
 
 export default function FocusHub({ 
   tasks = [], 
@@ -19,69 +15,15 @@ export default function FocusHub({
   onToggleTask, 
   onAddTask, 
   onDeleteTask, 
-  onLogSession,
+  timer, activeTask, onSelectFocusTask, onStartTimer, onOpenTask, ambient,
   onOpenSettings,
   onShowToast
 }) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('WORK');
-  const [activeTaskId, setActiveTaskId] = useState(null);
-  const [sessionNotice, setSessionNotice] = useState(null);
-  const [ambientPlaying, setAmbientPlaying] = useState(false);
-
-  const toggleQuickAmbient = () => {
-    if (ambientPlaying) {
-      stopAmbientSound();
-      setAmbientPlaying(false);
-      if (onShowToast) onShowToast('Ambient flow paused', 'info');
-    } else {
-      const audioSettings = getStoredAudioSettings();
-      const soundToPlay = audioSettings.ambientSound && audioSettings.ambientSound !== 'none' 
-        ? audioSettings.ambientSound 
-        : 'binaural';
-      startAmbientSound(soundToPlay, audioSettings.ambientVolume ?? 0.3);
-      setAmbientPlaying(true);
-      const label = soundToPlay === 'binaural' ? 'Alpha Waves (10Hz)' : soundToPlay === 'whitenoise' ? 'White Noise' : 'Rain';
-      if (onShowToast) onShowToast(`Playing ${label} flow`, 'success');
-    }
-  };
-
-  // Active task fallback
-  const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0] || null;
-
-  // Timer completion callback
-  const handleTimerComplete = (duration) => {
-    const minutes = Math.max(1, Math.round(duration / 60));
-    if (onLogSession) {
-      onLogSession({
-        task_id: activeTask ? activeTask.id : null,
-        task_title: activeTask ? activeTask.title : 'General Focus',
-        duration_minutes: minutes,
-        mode,
-      });
-    }
-    setSessionNotice(`Focus session completed! Logged ${minutes}m to your activity record.`);
-    setTimeout(() => setSessionNotice(null), 6000);
-  };
-
-  const { timeLeft, formattedTime, isRunning, mode, start, pause, reset, switchMode } = useTimer(handleTimerComplete);
-
-  // Global hotkey integration (Space to toggle, R to reset)
-  useEffect(() => {
-    const handleToggle = () => {
-      if (isRunning) pause();
-      else start();
-    };
-    const handleReset = () => {
-      reset();
-    };
-    window.addEventListener('alfafocus:toggle-timer', handleToggle);
-    window.addEventListener('alfafocus:reset-timer', handleReset);
-    return () => {
-      window.removeEventListener('alfafocus:toggle-timer', handleToggle);
-      window.removeEventListener('alfafocus:reset-timer', handleReset);
-    };
-  }, [isRunning, pause, start, reset]);
+  const { timeLeft, formattedTime, isRunning, isCompleted, hasRun, mode, pause, reset, switchMode, finish } = timer;
+  const ambientPlaying = ambient.active !== 'none';
+  const toggleQuickAmbient = () => ambientPlaying ? ambient.stop() : ambient.play();
 
   // Daily target state & calculations
   const [dailyTarget, setDailyTarget] = useState(() => {
@@ -102,16 +44,8 @@ export default function FocusHub({
     if (onShowToast) onShowToast(`Daily target updated to ${updated} blocks`, 'info');
   };
 
-  const todayDateStr = new Date().toDateString();
-  const todaySessionsCount = sessions.filter(s => {
-    try {
-      const d = s.completed_at || s.created_at;
-      return d ? new Date(d).toDateString() === todayDateStr : false;
-    } catch {
-      return false;
-    }
-  }).length;
-
+  const todayDateStr = localDateKey();
+  const todaySessionsCount = sessions.filter(session => sessionDay(session) === todayDateStr).length;
   const targetPercent = Math.min(100, Math.round((todaySessionsCount / dailyTarget) * 100));
   const isTargetAchieved = todaySessionsCount >= dailyTarget;
 
@@ -121,19 +55,24 @@ export default function FocusHub({
     ? ((timeLeft % 60) / 60) 
     : (totalModeDuration > 0 ? Math.max(0, Math.min(1, (totalModeDuration - timeLeft) / totalModeDuration)) : 0);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-    onAddTask({
+    const created = await onAddTask({
       title: newTaskTitle.trim(),
       category: newTaskCategory,
       priority: 'high',
+      due_date: todayDateStr,
     });
-    setNewTaskTitle('');
-    if (onShowToast) onShowToast('Task added to Today', 'success');
+    if (created) setNewTaskTitle('');
   };
 
-  const completedCount = tasks.filter(t => t.completed).length;
+  const completedToday = tasks.filter(task => taskCompletionDay(task) === todayDateStr);
+  const completedCount = completedToday.length;
+  const dailyTasks = tasks.filter(task => task.due_date === todayDateStr || completedToday.includes(task));
+  const queue = tasks.filter(task => task.completed
+    ? taskCompletionDay(task) === todayDateStr
+    : !task.due_date || task.due_date <= todayDateStr);
 
   // Omni-Search & Category Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,24 +82,31 @@ export default function FocusHub({
 
   const categoryCounts = categories.reduce((acc, cat) => {
     if (cat === 'ALL') {
-      acc[cat] = tasks.length;
+      acc[cat] = queue.length;
     } else {
-      acc[cat] = tasks.filter(t => (t.category || 'WORK').toUpperCase() === cat).length;
+      acc[cat] = queue.filter(t => (t.category || 'WORK').toUpperCase() === cat).length;
     }
     return acc;
   }, {});
 
-  const filteredTasks = tasks.filter((task) => {
+  const filteredTasks = queue.filter((task) => {
     const matchesSearch = !searchQuery.trim() || (task.title || '').toLowerCase().includes(searchQuery.toLowerCase().trim());
     const matchesCategory = selectedCategory === 'ALL' || (task.category || 'WORK').toUpperCase() === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
+  const groups = [
+    ['Overdue', filteredTasks.filter(task => !task.completed && task.due_date && task.due_date < todayDateStr)],
+    ['Due today', filteredTasks.filter(task => !task.completed && task.due_date === todayDateStr)],
+    ['Completed today', filteredTasks.filter(task => task.completed)],
+    ['Unscheduled', filteredTasks.filter(task => !task.completed && !task.due_date)],
+  ];
+
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#09090B] text-[#FAFAFA]">
+    <div className="flex min-w-0 flex-1 flex-col bg-[#09090B] xl:flex-row xl:overflow-hidden text-[#FAFAFA]">
       
       {/* 1. Main Today's Checklist Area */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-auto p-4 xl:p-8">
         <header className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Today's Focus</h1>
@@ -183,12 +129,7 @@ export default function FocusHub({
         </header>
 
         {/* Session notification banner */}
-        {sessionNotice && (
-          <div className="mb-4 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-sm flex items-center gap-2.5 animate-fadeIn">
-            <Clock className="w-4 h-4 text-emerald-400" />
-            <span>{sessionNotice}</span>
-          </div>
-        )}
+
 
         {/* Error notification */}
         {error && (
@@ -287,13 +228,13 @@ export default function FocusHub({
           <div className="flex justify-between items-center">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Today's Tasks</h2>
             <span className="text-xs text-zinc-500">
-              {filteredTasks.length} shown {filteredTasks.length !== tasks.length && `(of ${tasks.length} total)`}
+              {filteredTasks.length} shown {filteredTasks.length !== queue.length && `(of ${queue.length} total)`}
             </span>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-sm text-zinc-500">Loading tasks...</div>
-          ) : tasks.length === 0 ? (
+          ) : queue.length === 0 ? (
             <div className="p-8 text-center text-sm text-zinc-500 bg-[#18181B] rounded-xl border border-zinc-800">
               No tasks scheduled for today. Add one above to get started!
             </div>
@@ -312,11 +253,13 @@ export default function FocusHub({
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredTasks.map((task) => (
+              {groups.filter(([, items]) => items.length > 0).map(([label, items]) => (
+                <section key={label} className="space-y-2" aria-label={label}>
+                  <h3 className="pt-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</h3>
+                  {items.map(task => (
                 <div 
                   key={task.id}
-                  onClick={() => setActiveTaskId(task.id)}
-                  className={`flex items-center justify-between p-4 rounded-xl border transition cursor-pointer ${
+                  className={`flex items-center justify-between p-4 rounded-xl border transition ${
                     activeTask?.id === task.id 
                       ? 'bg-zinc-800/60 border-emerald-500/50' 
                       : 'bg-[#18181B] border-zinc-800/80 hover:border-zinc-700'
@@ -332,9 +275,9 @@ export default function FocusHub({
                       {task.completed ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Circle className="w-5 h-5" />}
                     </button>
                     <div className="flex-1">
-                      <p className={`text-sm font-medium ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
+                      <button type="button" onClick={() => onOpenTask(task.id)} className={`text-left text-sm font-medium ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
                         {task.title}
-                      </p>
+                      </button>
                       {task.progress > 0 && !task.completed && (
                         <div className="w-32 bg-zinc-800 h-1.5 rounded-full mt-2 overflow-hidden">
                           <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${task.progress}%` }}></div>
@@ -344,6 +287,9 @@ export default function FocusHub({
                   </div>
 
                   <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => onSelectFocusTask(task.id)}
+                      aria-label={'Select ' + task.title + ' for focus'}
+                      className="text-xs text-emerald-400 hover:underline">Focus</button>
                     <span className="text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 uppercase">
                       {task.category || 'WORK'}
                     </span>
@@ -356,6 +302,8 @@ export default function FocusHub({
                     </button>
                   </div>
                 </div>
+                  ))}
+                </section>
               ))}
             </div>
           )}
@@ -363,7 +311,7 @@ export default function FocusHub({
       </main>
 
       {/* 2. Right Panel: Active Focus & Circular Timer */}
-      <aside className="w-96 border-l border-zinc-800 bg-[#09090B] p-6 flex flex-col justify-between">
+      <aside className="flex w-full shrink-0 flex-col justify-between gap-6 border-t border-zinc-800 bg-[#09090B] p-4 xl:w-96 xl:overflow-y-auto xl:border-l xl:border-t-0 xl:p-6">
         <div className="space-y-6">
           
           {/* Active Task Banner */}
@@ -426,7 +374,7 @@ export default function FocusHub({
                   {formattedTime}
                 </span>
                 <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest mt-1 block">
-                  {isRunning ? 'Focusing' : 'Paused'}
+                  {isRunning ? 'Focusing' : hasRun ? 'Paused' : isCompleted ? 'Finished' : 'Ready'}
                 </span>
               </div>
             </div>
@@ -434,10 +382,10 @@ export default function FocusHub({
             {/* Controls */}
             <div className="flex items-center gap-3 w-full">
               <button
-                onClick={isRunning ? pause : start}
+                onClick={isRunning ? pause : onStartTimer}
                 className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-lg shadow-emerald-950/50"
               >
-                {isRunning ? <><Pause className="w-4 h-4" /> Pause</> : <><Play className="w-4 h-4 fill-white" /> Start Focus</>}
+                {isRunning ? <><Pause className="w-4 h-4" /> Pause</> : <><Play className="w-4 h-4 fill-white" /> {hasRun ? 'Resume Focus' : 'Start Focus'}</>}
               </button>
               <button
                 onClick={reset}
@@ -448,12 +396,18 @@ export default function FocusHub({
               </button>
             </div>
 
+            {mode === 'stopwatch' && hasRun && (
+              <button type="button" onClick={finish} className="mt-2 w-full rounded-lg bg-zinc-800 py-2 text-xs text-emerald-300">
+                Finish and log
+              </button>
+            )}
+
             {/* Quick Ambient Flow Sound Toggle */}
             <div className="w-full mt-4 pt-3.5 border-t border-zinc-800 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-zinc-400">
                 <Radio className={`w-3.5 h-3.5 ${ambientPlaying ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}`} />
                 <span className="text-[11px]">
-                  Ambient: <strong className="text-zinc-200 font-medium">{ambientPlaying ? 'Playing' : 'Off'}</strong>
+                  Ambient: <strong className="text-zinc-200 font-medium">{ambientPlaying ? ambient.volume === 0 ? 'Muted' : 'Playing' : 'Off'}</strong>
                 </span>
               </div>
               <button
@@ -465,7 +419,7 @@ export default function FocusHub({
                     : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
-                {ambientPlaying ? 'Pause Ambient' : 'Play Flow Waves'}
+                {ambientPlaying ? 'Pause Ambient' : 'Play ambient sound'}
               </button>
             </div>
           </div>
@@ -548,12 +502,12 @@ export default function FocusHub({
         <div className="p-4 rounded-xl bg-[#18181B] border border-zinc-800">
           <div className="flex justify-between items-center text-xs mb-2">
             <span className="text-zinc-400 font-medium">Daily Task Checklist</span>
-            <span className="text-emerald-400 font-bold">{completedCount} / {tasks.length} Tasks</span>
+            <span className="text-emerald-400 font-bold">{completedCount} / {dailyTasks.length} Tasks</span>
           </div>
           <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
             <div 
               className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-              style={{ width: `${tasks.length ? (completedCount / tasks.length) * 100 : 0}%` }}
+              style={{ width: `${dailyTasks.length ? (completedCount / dailyTasks.length) * 100 : 0}%` }}
             ></div>
           </div>
         </div>

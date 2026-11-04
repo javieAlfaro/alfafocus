@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { nextOccurrence, resolveTaskStatus } from './utils/taskRules.js'
+
 // Database operations for Users, Lists, Tasks, and Focus Sessions
 // Strictly uses parameterized queries ($1, $2) to prevent SQL injection.
 
@@ -91,37 +94,24 @@ export async function updateList(pool, id, { title, color }, userId = null) {
 }
 
 export async function deleteList(pool, id, defaultListId = null, userId = null) {
-  const current = await getListById(pool, id, userId)
-  if (!current) return false
+  const remove = async client => {
+    const current = await getListById(client, id, userId)
+    if (!current) return false
 
-  // Reassign tasks from the deleted list to defaultListId before deleting so tasks are preserved
-  if (defaultListId && Number(defaultListId) !== Number(id)) {
-    if (userId) {
-      await pool.query(
-        'UPDATE tasks SET list_id = $1 WHERE list_id = $2 AND user_id = $3',
-        [defaultListId, id, userId]
-      )
-    } else {
-      await pool.query(
-        'UPDATE tasks SET list_id = $1 WHERE list_id = $2',
-        [defaultListId, id]
-      )
+    if (defaultListId && Number(defaultListId) !== Number(id)) {
+      if (userId) {
+        if (!await getListById(client, defaultListId, userId)) throw invalidReference('Destination project not found')
+        await client.query('UPDATE tasks SET list_id = $1 WHERE list_id = $2 AND user_id = $3', [defaultListId, id, userId])
+      } else {
+        await client.query('UPDATE tasks SET list_id = $1 WHERE list_id = $2', [defaultListId, id])
+      }
     }
-  }
-
-  if (userId) {
-    const result = await pool.query(
-      'DELETE FROM task_lists WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
-    )
+    const result = userId
+      ? await client.query('DELETE FROM task_lists WHERE id = $1 AND user_id = $2 RETURNING id', [id, userId])
+      : await client.query('DELETE FROM task_lists WHERE id = $1 RETURNING id', [id])
     return (result.rowCount ?? 0) > 0
   }
-
-  const result = await pool.query(
-    'DELETE FROM task_lists WHERE id = $1 RETURNING id',
-    [id]
-  )
-  return (result.rowCount ?? 0) > 0
+  return userId ? withWorkspaceTransaction(pool, userId, remove) : remove(pool)
 }
 
 export async function getAllTasks(pool, userId = null) {
@@ -138,98 +128,165 @@ export async function getAllTasks(pool, userId = null) {
   return result.rows
 }
 
-export async function getTaskById(pool, id) {
-  const result = await pool.query(
-    'SELECT * FROM tasks WHERE id = $1',
-    [id]
-  )
+function invalidReference(message) {
+  return Object.assign(new Error(message), { status: 400 })
+}
+
+async function withWorkspaceTransaction(pool, userId, mutate) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    // Serialize hierarchy and recurrence mutations for this workspace.
+    await client.query('SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE', [userId])
+    const result = await mutate(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function getTaskById(pool, id, userId) {
+  const result = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [id, userId])
   return result.rows[0] ?? null
 }
 
-export async function createTask(pool, { title, category, priority, due_date, list_id, parent_task_id }, userId = 1) {
-  let targetListId = list_id ? Number(list_id) : null
+export function createTask(pool, fields, userId) {
+  return withWorkspaceTransaction(pool, userId, async client => {
+    const { title, category, priority, due_date = null, parent_task_id = null, recurrence_rule = null } = fields
+    let listId = fields.list_id ?? null
 
-  // If list_id was provided, ensure it actually exists in task_lists
-  if (targetListId) {
-    const listCheck = await pool.query('SELECT id FROM task_lists WHERE id = $1', [targetListId])
-    if (listCheck.rows.length === 0) {
-      targetListId = null
-    }
-  }
-
-  // If no valid list_id, resolve the user's first list or auto-create a default list
-  if (!targetListId && userId) {
-    const userLists = await pool.query('SELECT id FROM task_lists WHERE user_id = $1 ORDER BY id ASC LIMIT 1', [userId])
-    if (userLists.rows.length > 0) {
-      targetListId = userLists.rows[0].id
+    if (parent_task_id !== null) {
+      const parent = await getTaskById(client, parent_task_id, userId)
+      if (!parent) throw invalidReference('Parent task not found')
+      if (parent.recurrence_rule) throw invalidReference('Recurring tasks must be standalone')
+      if (listId !== null && listId !== parent.list_id) throw invalidReference('Subtasks must use the parent project')
+      listId = parent.list_id
+    } else if (listId !== null) {
+      if (!await getListById(client, listId, userId)) throw invalidReference('Project not found')
     } else {
-      const defaultList = await pool.query(
-        'INSERT INTO task_lists (user_id, title, color) VALUES ($1, $2, $3) RETURNING id',
-        [userId, 'My Tasks', '#059669']
-      )
-      targetListId = defaultList.rows[0].id
+      const lists = await getAllLists(client, userId)
+      listId = (lists[0] ?? await createList(client, { title: 'My Tasks' }, userId)).id
     }
-  }
+    if (recurrence_rule && (!due_date || parent_task_id !== null)) {
+      throw invalidReference('Recurring tasks must be standalone and have a due date')
+    }
 
-  const result = await pool.query(
-    `INSERT INTO tasks (title, category, priority, due_date, list_id, parent_task_id, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING *`,
-    [title, category || 'WORK', priority || 'medium', due_date || null, targetListId, parent_task_id || null, userId || 1]
-  )
-  return result.rows[0]
-}
-
-export async function updateTask(pool, id, fields) {
-  const current = await getTaskById(pool, id)
-  if (!current) return null
-
-  const title = fields.title !== undefined ? fields.title : current.title
-  const category = fields.category !== undefined ? fields.category : current.category
-  const priority = fields.priority !== undefined ? fields.priority : current.priority
-  const completed = fields.completed !== undefined ? fields.completed : current.completed
-  const progress = fields.progress !== undefined ? fields.progress : current.progress
-  const list_id = fields.list_id !== undefined ? fields.list_id : current.list_id
-
-  const result = await pool.query(
-    `UPDATE tasks
-     SET title = $1, category = $2, priority = $3, completed = $4, progress = $5, list_id = $6
-     WHERE id = $7
-     RETURNING *`,
-    [title, category, priority, completed, progress, list_id, id]
-  )
-  return result.rows[0]
-}
-
-export async function deleteTask(pool, id) {
-  // Cascades to delete subtasks automatically due to FOREIGN KEY ... ON DELETE CASCADE
-  const result = await pool.query(
-    'DELETE FROM tasks WHERE id = $1 RETURNING id',
-    [id]
-  )
-  return (result.rowCount ?? 0) > 0
-}
-
-export async function recordFocusSession(pool, { task_id, task_title, mode, duration_minutes }, userId = 1) {
-  const result = await pool.query(
-    `INSERT INTO focus_sessions (user_id, task_id, task_title, mode, duration_minutes)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [userId || 1, task_id || null, task_title || 'General Focus', mode || 'pomodoro', duration_minutes || 25]
-  )
-  return result.rows[0]
-}
-
-export async function getAllFocusSessions(pool, userId = null) {
-  if (userId) {
-    const result = await pool.query(
-      'SELECT * FROM focus_sessions WHERE user_id = $1 ORDER BY completed_at DESC',
-      [userId]
+    const status = resolveTaskStatus({ status: 'todo' }, fields)
+    const completed = status === 'done'
+    const result = await client.query(
+      `INSERT INTO tasks (
+         title, category, priority, due_date, list_id, parent_task_id, user_id,
+         progress, status, completed, completed_at, recurrence_rule, series_id, occurrence_date
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10 THEN now() END, $11, $12, $13)
+       RETURNING *`,
+      [title, category, priority, due_date, listId, parent_task_id, userId, fields.progress ?? 0,
+        status, completed, recurrence_rule, recurrence_rule ? randomUUID() : null, recurrence_rule ? due_date : null]
     )
-    return result.rows
-  }
+    return result.rows[0]
+  })
+}
+
+export function updateTask(pool, id, fields, userId) {
+  return withWorkspaceTransaction(pool, userId, async client => {
+    const current = await getTaskById(client, id, userId)
+    if (!current) return null
+
+    const next = { ...current, ...fields }
+    if (Object.hasOwn(fields, 'list_id') && fields.list_id !== current.list_id) {
+      if (current.parent_task_id !== null) throw invalidReference('Move the parent task to change projects')
+      if (next.list_id !== null && !await getListById(client, next.list_id, userId)) {
+        throw invalidReference('Project not found')
+      }
+      await client.query(
+        `WITH RECURSIVE subtree(id) AS (
+           SELECT id FROM tasks WHERE id = $1 AND user_id = $2
+           UNION
+           SELECT child.id FROM tasks AS child JOIN subtree ON child.parent_task_id = subtree.id
+           WHERE child.user_id = $2
+         )
+         UPDATE tasks SET list_id = $3 WHERE id IN (SELECT id FROM subtree) AND user_id = $2`,
+        [id, userId, next.list_id]
+      )
+    }
+
+    if (next.recurrence_rule) {
+      const children = await client.query('SELECT 1 FROM tasks WHERE parent_task_id = $1 AND user_id = $2 LIMIT 1', [id, userId])
+      if (!next.due_date || next.parent_task_id !== null || children.rowCount) {
+        throw invalidReference('Recurring tasks must be standalone and have a due date')
+      }
+      next.series_id ??= randomUUID()
+      next.occurrence_date ??= next.due_date
+    }
+
+    next.status = resolveTaskStatus(current, fields)
+    next.completed = next.status === 'done'
+    const result = await client.query(
+      `UPDATE tasks
+       SET title = $1, category = $2, priority = $3, completed = $4, progress = $5,
+           due_date = $6, status = $7, recurrence_rule = $8, series_id = $9, occurrence_date = $10,
+           completed_at = CASE WHEN $4 THEN COALESCE(completed_at, now()) ELSE NULL END
+       WHERE id = $11 AND user_id = $12
+       RETURNING *`,
+      [next.title, next.category, next.priority, next.completed, next.progress, next.due_date,
+        next.status, next.recurrence_rule, next.series_id, next.occurrence_date, id, userId]
+    )
+
+    if (next.completed && !current.completed && next.recurrence_rule) {
+      const nextDate = nextOccurrence(next.occurrence_date, next.recurrence_rule)
+      if (nextDate) {
+        await client.query(
+          `INSERT INTO tasks (title, category, priority, due_date, list_id, user_id,
+                              recurrence_rule, series_id, occurrence_date)
+           SELECT $1, $2, $3, $4, $5, $6, $7, $8, $4
+           WHERE NOT EXISTS (
+             SELECT 1 FROM tasks WHERE user_id = $6 AND series_id = $8 AND occurrence_date > $9
+           )
+           ON CONFLICT (user_id, series_id, occurrence_date) DO NOTHING`,
+          [next.title, next.category, next.priority, nextDate, next.list_id, userId,
+            next.recurrence_rule, next.series_id, next.occurrence_date]
+        )
+      }
+    }
+    return result.rows[0]
+  })
+}
+
+export function deleteTask(pool, id, userId) {
+  return withWorkspaceTransaction(pool, userId, async client => {
+    const result = await client.query('DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id', [id, userId])
+    return result.rowCount > 0
+  })
+}
+
+export function recordFocusSession(pool, { task_id, task_title, mode, duration_minutes, client_session_id }, userId) {
+  return withWorkspaceTransaction(pool, userId, async client => {
+    if (client_session_id) {
+      const existing = await client.query(
+        'SELECT * FROM focus_sessions WHERE user_id = $1 AND client_session_id = $2',
+        [userId, client_session_id]
+      )
+      if (existing.rows[0]) return existing.rows[0]
+    }
+    if (task_id !== null && !await getTaskById(client, task_id, userId)) {
+      throw invalidReference('Session task not found')
+    }
+    const result = await client.query(
+      `INSERT INTO focus_sessions (user_id, task_id, task_title, mode, duration_minutes, client_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, task_id, task_title, mode, duration_minutes, client_session_id]
+    )
+    return result.rows[0]
+  })
+}
+
+export async function getAllFocusSessions(pool, userId) {
   const result = await pool.query(
-    'SELECT * FROM focus_sessions ORDER BY completed_at DESC'
+    'SELECT * FROM focus_sessions WHERE user_id = $1 ORDER BY completed_at DESC',
+    [userId]
   )
   return result.rows
 }

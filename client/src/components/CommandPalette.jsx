@@ -3,17 +3,15 @@ import {
   Search, CheckSquare, FolderKanban, Calendar, BarChart2, 
   Play, Pause, RotateCcw, Radio, Sparkles, ArrowRight, CornerDownLeft 
 } from 'lucide-react';
-import { startAmbientSound, stopAmbientSound } from '../utils/audioAlerts';
 
 export default function CommandPalette({ 
   isOpen, 
   onClose, 
   tasks = [], 
   onSelectView, 
-  onSelectTask,
+  onSelectTask, onToggleTimer, onResetTimer, ambient,
   onShowToast 
 }) {
-  if (!isOpen) return null;
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -23,7 +21,8 @@ export default function CommandPalette({
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timeout = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timeout);
     }
   }, [isOpen]);
 
@@ -65,7 +64,7 @@ export default function CommandPalette({
       label: 'Start / Pause Active Timer',
       icon: Play,
       action: () => {
-        window.dispatchEvent(new CustomEvent('alfafocus:toggle-timer'));
+        onToggleTimer();
         if (onShowToast) onShowToast('Toggled active timer', 'info');
         onClose();
       },
@@ -76,7 +75,7 @@ export default function CommandPalette({
       label: 'Reset Focus Timer',
       icon: RotateCcw,
       action: () => {
-        window.dispatchEvent(new CustomEvent('alfafocus:reset-timer'));
+        onResetTimer();
         if (onShowToast) onShowToast('Timer reset', 'info');
         onClose();
       },
@@ -88,8 +87,7 @@ export default function CommandPalette({
       label: 'Play Alpha Waves (10Hz Binaural Beats)',
       icon: Radio,
       action: () => {
-        startAmbientSound('binaural', 0.35);
-        if (onShowToast) onShowToast('Playing 10Hz Alpha Waves', 'success');
+        ambient.play('binaural');
         onClose();
       },
     },
@@ -99,8 +97,7 @@ export default function CommandPalette({
       label: 'Play Gentle Rain (Brownian Noise)',
       icon: Radio,
       action: () => {
-        startAmbientSound('rain', 0.35);
-        if (onShowToast) onShowToast('Playing Gentle Rain flow', 'success');
+        ambient.play('rain');
         onClose();
       },
     },
@@ -110,8 +107,7 @@ export default function CommandPalette({
       label: 'Play White Noise Static',
       icon: Radio,
       action: () => {
-        startAmbientSound('whitenoise', 0.3);
-        if (onShowToast) onShowToast('Playing White Noise', 'success');
+        ambient.play('whitenoise');
         onClose();
       },
     },
@@ -121,7 +117,7 @@ export default function CommandPalette({
       label: 'Stop Ambient Background Sound',
       icon: Radio,
       action: () => {
-        stopAmbientSound();
+        ambient.stop();
         if (onShowToast) onShowToast('Ambient audio stopped', 'info');
         onClose();
       },
@@ -129,7 +125,7 @@ export default function CommandPalette({
   ];
 
   // Dynamic task commands
-  const taskCommands = tasks.slice(0, 10).map((t) => ({
+  const taskCommands = tasks.map((t) => ({
     id: `task-${t.id}`,
     category: 'Jump to Task',
     label: t.title,
@@ -137,8 +133,6 @@ export default function CommandPalette({
     icon: CheckSquare,
     action: () => {
       if (onSelectTask) onSelectTask(t.id);
-      onSelectView('today');
-      if (onShowToast) onShowToast(`Selected "${t.title}"`, 'info');
       onClose();
     },
   }));
@@ -148,7 +142,7 @@ export default function CommandPalette({
   const filteredItems = allItems.filter((item) =>
     item.label.toLowerCase().includes(query.toLowerCase()) ||
     item.category.toLowerCase().includes(query.toLowerCase())
-  );
+  ).slice(0, 30);
 
   // Keyboard navigation inside palette
   const handleKeyDown = (e) => {
@@ -168,6 +162,8 @@ export default function CommandPalette({
       onClose();
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div 

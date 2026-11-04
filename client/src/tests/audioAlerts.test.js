@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { 
   DEFAULT_AUDIO_SETTINGS, 
   getStoredAudioSettings, 
-  saveStoredAudioSettings 
+  saveStoredAudioSettings, startAmbientSound, stopAmbientSound, setAmbientVolume, getCurrentAmbientType
 } from '../utils/audioAlerts.js';
 
 describe('Audio Settings & Ambient Engine Defaults', () => {
@@ -40,5 +40,45 @@ describe('Audio Settings & Ambient Engine Defaults', () => {
     expect(retrieved.volume).toBe(0.9);
     expect(retrieved.ambientSound).toBe('binaural');
     expect(retrieved.ambientVolume).toBe(0.4);
+  });
+
+  it('silences ambient playback at zero and tears down the old sound when switching', () => {
+    const sources = [];
+    const gains = [];
+    class AudioContext {
+      currentTime = 10;
+      state = 'running';
+      sampleRate = 4;
+      createGain() {
+        const node = { gain: { setValueAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() };
+        gains.push(node);
+        return node;
+      }
+      createBuffer() { return { getChannelData: () => new Float32Array(12) }; }
+      createBufferSource() {
+        const node = { connect: vi.fn(), start: vi.fn(), stop: vi.fn(), disconnect: vi.fn() };
+        sources.push(node);
+        return node;
+      }
+      createBiquadFilter() {
+        return { frequency: { setValueAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() };
+      }
+    }
+
+    vi.stubGlobal('window', { AudioContext });
+    try {
+      startAmbientSound('rain', 0.4);
+      setAmbientVolume(0);
+      expect(gains[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
+      startAmbientSound('whitenoise', 0);
+      expect(sources[0].stop).toHaveBeenCalledOnce();
+      expect(gains[0].disconnect).toHaveBeenCalledOnce();
+      expect(gains[1].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
+      expect(getCurrentAmbientType()).toBe('whitenoise');
+    } finally {
+      stopAmbientSound();
+      vi.unstubAllGlobals();
+    }
+    expect(sources[1].disconnect).toHaveBeenCalledOnce();
   });
 });

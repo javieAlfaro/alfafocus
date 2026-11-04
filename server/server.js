@@ -4,7 +4,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { pool } from './db/pool.js'
 import * as tasksRepo from './tasksRepo.js'
-import { validateTaskInput, validateFocusSessionInput } from './utils/validators.js'
+import { parseId, validateTaskInput, validateFocusSessionInput } from './utils/validators.js'
 import { 
   hashPassword, 
   comparePassword, 
@@ -12,7 +12,10 @@ import {
   verifyToken 
 } from './utils/auth.js'
 
-const app = express()
+export const app = express()
+const legacyUser = process.env.APP_USER
+const legacyPassword = process.env.APP_PASSWORD
+const legacyEnabled = process.env.ENABLE_LEGACY_ACCESS === 'true' && Boolean(legacyUser && legacyPassword)
 
 // 1. Security Headers via Helmet
 app.use(helmet({
@@ -119,7 +122,7 @@ app.post('/api/auth/login', authLimiter, async (request, response, next) => {
 
   try {
     const user = await tasksRepo.findUserByUsername(pool, username)
-    if (!user || !user.password_hash) {
+    if (!user || !user.password_hash || (user.id === 2 && user.username === 'evaluator' && !legacyEnabled)) {
       return response.status(401).json({ error: 'Invalid username or password.' })
     }
 
@@ -150,63 +153,34 @@ app.get('/api/auth/me', (request, response) => {
 })
 
 // 4. HTTP Basic Authentication & App Gate Middleware (Course Section 2, Option B + JWT Support)
-const APP_USER = process.env.APP_USER || 'alfa'
-const APP_PASSWORD = process.env.APP_PASSWORD || 'alfa2026'
-
 app.use('/api', (request, response, next) => {
-  // Allow OPTIONS preflight requests for CORS
   if (request.method === 'OPTIONS') return next()
-
-  // Allow registration and login without credentials
-  if (
-    request.path === '/auth/register' || 
-    request.path === '/auth/login' ||
-    request.path.startsWith('/auth') ||
-    request.originalUrl?.includes('/api/auth')
-  ) {
+  const authorization = request.headers.authorization || ''
+  if (authorization.startsWith('Bearer ')) {
+    const user = verifyToken(authorization.slice(7).trim())
+    if (!user || !parseId(user.id)) {
+      return response.status(401).json({ error: 'Invalid or expired session. Please sign in again.' })
+    }
+    request.user = user
     return next()
   }
 
-  const authHeader = request.headers['authorization'] || ''
-  const legacyPassword = request.headers['x-app-password']
-
-  // 1. Check Bearer JWT Token
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim()
-    const decoded = verifyToken(token)
-    if (decoded) {
-      request.user = decoded
-      return next()
-    }
-  }
-
-  // 2. Check HTTP Basic Authentication: "Basic <base64(user:pass)>"
-  if (authHeader.startsWith('Basic ')) {
-    try {
-      const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8')
-      const colonIndex = credentials.indexOf(':')
-      if (colonIndex !== -1) {
-        const user = credentials.slice(0, colonIndex)
-        const pass = credentials.slice(colonIndex + 1)
-        if (user === APP_USER && pass === APP_PASSWORD) {
-          request.user = { id: 1, username: 'default_user' }
-          return next()
-        }
-      }
-    } catch {
-      // Malformed header, proceed to 401
-    }
-  }
-
-  // 3. Check x-app-password header for seamless React client compatibility
-  if (legacyPassword === APP_PASSWORD) {
+  const basic = legacyEnabled && authorization.startsWith('Basic ')
+    ? Buffer.from(authorization.slice(6), 'base64').toString('utf8')
+    : null
+  if (legacyEnabled && (basic === legacyUser + ':' + legacyPassword ||
+      request.headers['x-app-password'] === legacyPassword)) {
     request.user = { id: 1, username: 'default_user' }
     return next()
   }
+  response.status(401).json({ error: 'Sign in to access your workspace.' })
+})
 
-  // 4. Unauthorized: send WWW-Authenticate header to trigger native browser login modal
-  response.setHeader('WWW-Authenticate', 'Basic realm="AlfaFocus Secure API"')
-  return response.status(401).json({ error: 'Unauthorized: valid access credentials required.' })
+app.param('id', (request, response, next, value) => {
+  const id = parseId(value)
+  if (!id) return response.status(404).json({ error: 'Resource not found' })
+  request.resourceId = id
+  next()
 })
 
 // 5. List Endpoints
@@ -234,7 +208,7 @@ app.post('/api/lists', async (request, response, next) => {
 app.patch('/api/lists/:id', async (request, response, next) => {
   const { title, color } = request.body || {}
   try {
-    const updated = await tasksRepo.updateList(pool, request.params.id, { title, color }, request.user?.id)
+    const updated = await tasksRepo.updateList(pool, request.resourceId, { title, color }, request.user?.id)
     if (!updated) return response.status(404).json({ error: 'List not found' })
     response.json(updated)
   } catch (error) {
@@ -244,8 +218,10 @@ app.patch('/api/lists/:id', async (request, response, next) => {
 
 app.delete('/api/lists/:id', async (request, response, next) => {
   try {
-    const defaultListId = request.query.defaultListId || request.body?.defaultListId || null
-    const deleted = await tasksRepo.deleteList(pool, request.params.id, defaultListId, request.user?.id)
+    const target = request.query.defaultListId ?? request.body?.defaultListId
+    const defaultListId = target == null ? null : parseId(target)
+    if (target != null && !defaultListId) return response.status(400).json({ error: 'Invalid destination project' })
+    const deleted = await tasksRepo.deleteList(pool, request.resourceId, defaultListId, request.user?.id)
     if (!deleted) return response.status(404).json({ error: 'List not found' })
     response.json({ success: true, message: 'List deleted' })
   } catch (error) {
@@ -276,8 +252,10 @@ app.post('/api/tasks', async (request, response, next) => {
 })
 
 app.patch('/api/tasks/:id', async (request, response, next) => {
+  const { isValid, errors, data } = validateTaskInput(request.body ?? {}, { partial: true })
+  if (!isValid) return response.status(400).json({ error: errors.join('; ') })
   try {
-    const updated = await tasksRepo.updateTask(pool, request.params.id, request.body ?? {})
+    const updated = await tasksRepo.updateTask(pool, request.resourceId, data, request.user.id)
     if (!updated) return response.status(404).json({ error: 'Task not found' })
     response.json(updated)
   } catch (error) {
@@ -287,7 +265,7 @@ app.patch('/api/tasks/:id', async (request, response, next) => {
 
 app.delete('/api/tasks/:id', async (request, response, next) => {
   try {
-    const removed = await tasksRepo.deleteTask(pool, request.params.id)
+    const removed = await tasksRepo.deleteTask(pool, request.resourceId, request.user.id)
     if (!removed) return response.status(404).json({ error: 'Task not found' })
     response.status(204).end()
   } catch (error) {
@@ -324,12 +302,14 @@ app.use((request, response) => {
 
 // 6. Centralized Error Handler (Checklist #25: Do not leak stack traces or connection details)
 app.use((error, request, response, next) => {
+  if (error.status === 400) return response.status(400).json({ error: error.message })
   console.error('[SERVER ERROR]:', error.message)
   response.status(500).json({ error: 'Something went wrong on the server' })
 })
 
-const port = process.env.PORT || 3000
-app.listen(port, () => {
-  console.log(`AlfaFocus API listening on http://localhost:${port}`)
-  console.log(`CORS allows: ${allowedOrigins.join(', ')}`)
-})
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  const port = process.env.PORT || 3000
+  app.listen(port, () => {
+    console.log('AlfaFocus API listening on port ' + port)
+  })
+}

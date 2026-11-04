@@ -1,0 +1,74 @@
+name: AlfaFocus checks
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    strategy:
+      matrix:
+        mock: ['true', 'false']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_USE_MOCK_API: ${{ matrix.mock }}
+
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration
+          POSTGRES_DB: alfafocus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d alfafocus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:integration@127.0.0.1:5432/alfafocus_test
+      - name: Install client test dependencies
+        working-directory: client
+        run: npm ci
+      - name: Exercise the client against the live adapter
+        env:
+          DATABASE_URL: postgres://postgres:integration@127.0.0.1:5432/alfafocus_test
+          WORKSPACE_TEST_API_URL: http://localhost:3000
+        run: |
+          npm start &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          curl --silent --fail --retry 10 --retry-connrefused --retry-delay 1 "$WORKSPACE_TEST_API_URL/readyz"
+          npm --prefix ../client test -- src/tests/workspaceFlow.test.jsx

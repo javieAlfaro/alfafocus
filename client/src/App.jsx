@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckSquare, FolderKanban, Calendar, BarChart2, Flame, User, 
   Settings, CheckCircle, AlertCircle, Info, X, Keyboard, Command,
   LogIn, LogOut 
 } from 'lucide-react';
 import FocusHub from './components/FocusHub';
+import TaskInspector from './components/TaskInspector';
+import { useTimer } from './hooks/useTimer';
+import { useAmbientAudio } from './hooks/useAmbientAudio';
 import ProjectBreakdown from './components/ProjectBreakdown';
 import HabitsHeatMap from './components/HabitsHeatMap';
 import CalendarPlanner from './components/CalendarPlanner';
@@ -19,7 +22,6 @@ import { calculateUserStreak } from './utils/streak';
 import { 
   listTasks, createTask, updateTask, deleteTask, 
   listLists, createList, updateList, deleteList, listFocusSessions, recordFocusSession,
-  getMe 
 } from './api';
 
 class ViewErrorBoundary extends React.Component {
@@ -84,62 +86,105 @@ export default function App() {
     }
   });
 
-  const loadAllData = async () => {
+  const [inspectedTaskId, setInspectedTaskId] = useState(null);
+  const [selectedFocusTaskId, setSelectedFocusTaskId] = useState(null);
+  const [projectTarget, setProjectTarget] = useState(null);
+  const [calendarTarget, setCalendarTarget] = useState(null);
+  const [failedSessions, setFailedSessions] = useState([]);
+  const workspaceVersion = useRef(0);
+  const pendingTasks = useRef(new Set());
+  const pendingSessionSaves = useRef(new Set());
+  const taskWriteVersion = useRef(0);
+  const ambient = useAmbientAudio();
+  const inspectedTask = tasks.find(task => task.id === inspectedTaskId);
+  const selectedFocusTask = tasks.find(task => task.id === selectedFocusTaskId);
+
+  const timer = useTimer((duration, run) => {
+    handleLogSession({
+      task_id: run.task?.id ?? null,
+      task_title: run.task?.title ?? 'General Focus',
+      mode: run.mode,
+      duration_minutes: Math.max(1, Math.round(duration / 60)),
+      client_session_id: crypto.randomUUID(),
+    });
+  });
+
+  const startTimer = () => timer.start(selectedFocusTask
+    ? { id: selectedFocusTask.id, title: selectedFocusTask.title, category: selectedFocusTask.category }
+    : null);
+  const toggleTimer = () => {
+    if (timer.isRunning) timer.pause();
+    else startTimer();
+  };
+
+  const loadAllData = async version => {
     setLoading(true);
     setError(null);
     try {
       const [loadedTasks, loadedLists, loadedSessions] = await Promise.all([
-        listTasks(),
-        listLists(),
-        listFocusSessions(),
+        listTasks(), listLists(), listFocusSessions(),
       ]);
+      if (workspaceVersion.current !== version) return;
       setTasks(loadedTasks);
       setLists(loadedLists);
       setSessions(loadedSessions);
     } catch (err) {
-      setError(err.message || 'Failed to load application data');
+      if (workspaceVersion.current !== version) return;
+      if (err.status === 401) {
+        handleLogout();
+        showToast('Your session expired. Please sign in again.', 'info');
+      } else {
+        setError(err.message || 'Failed to load application data');
+      }
     } finally {
-      setLoading(false);
+      if (workspaceVersion.current === version) setLoading(false);
     }
   };
 
-  // Compute dynamic consistency streak from user's sessions and completed tasks
   const userStreak = calculateUserStreak(sessions, tasks);
 
   const handleLogout = () => {
+    workspaceVersion.current++;
+    pendingTasks.current.clear();
+    pendingSessionSaves.current.clear();
     localStorage.removeItem('alfafocus_token');
     localStorage.removeItem('alfafocus_user');
     setCurrentUser(null);
+    setTasks([]);
+    setLists([]);
+    setSessions([]);
+    setFailedSessions([]);
+    setInspectedTaskId(null);
+    setSelectedFocusTaskId(null);
+    setProjectTarget(null);
+    setCalendarTarget(null);
+    setCurrentView('today');
+    setIsCommandPaletteOpen(false);
+    setIsSettingsOpen(false);
+    setIsShortcutsOpen(false);
+    setIsAuthOpen(false);
+    timer.switchMode('pomodoro');
+    ambient.stop();
     showToast('Signed out of workspace', 'info');
-    loadAllData();
   };
 
-  // Global power-user keyboard shortcuts
   useKeyboardShortcuts({
-    onToggleTimer: () => {
-      window.dispatchEvent(new CustomEvent('alfafocus:toggle-timer'));
-    },
-    onResetTimer: () => {
-      window.dispatchEvent(new CustomEvent('alfafocus:reset-timer'));
-    },
-    onSelectView: (view) => {
-      setCurrentView(view);
-      showToast(`Switched to ${view.toUpperCase()} screen`, 'info');
-    },
-    onToggleShortcutsModal: () => {
-      setIsShortcutsOpen((prev) => !prev);
-    },
+    onToggleTimer: currentUser && !inspectedTask && !isCommandPaletteOpen ? toggleTimer : undefined,
+    onResetTimer: currentUser && !inspectedTask && !isCommandPaletteOpen ? timer.reset : undefined,
+    onSelectView: currentUser && !inspectedTask ? setCurrentView : undefined,
+    onToggleShortcutsModal: () => setIsShortcutsOpen(prev => !prev),
     onOpenCommandPalette: () => {
-      setIsCommandPaletteOpen((prev) => !prev);
+      if (currentUser && !inspectedTask) setIsCommandPaletteOpen(prev => !prev);
     },
     onCloseModals: () => {
       setIsSettingsOpen(false);
       setIsShortcutsOpen(false);
       setIsCommandPaletteOpen(false);
       setIsAuthOpen(false);
+      setInspectedTaskId(null);
     },
   });
-  
+
   // Toast notification state
   const [toast, setToast] = useState(null);
 
@@ -150,144 +195,172 @@ export default function App() {
     }, 3500);
   };
 
-  // Load shared data on mount and whenever authentication status changes
   useEffect(() => {
-    if (currentUser) {
-      loadAllData();
-    }
+    if (currentUser) loadAllData(++workspaceVersion.current);
+    return () => { workspaceVersion.current++; };
   }, [currentUser?.id]);
 
-  // Shared task toggle handler (with optimistic update)
-  const handleToggleTask = async (task) => {
-    const nextStatus = !task.completed;
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: nextStatus } : t));
-    try {
-      await updateTask(task.id, { completed: nextStatus });
-      showToast(nextStatus ? 'Task completed! Keep the momentum.' : 'Task marked active', 'info');
-    } catch {
-      // Revert on error
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: task.completed } : t));
-      showToast('Failed to update task', 'error');
+  const refreshTasks = async version => {
+    while (workspaceVersion.current === version) {
+      const writeVersion = taskWriteVersion.current;
+      const savedTasks = await listTasks();
+      if (workspaceVersion.current !== version) return;
+      if (taskWriteVersion.current === writeVersion) {
+        setTasks(savedTasks);
+        return;
+      }
     }
   };
 
-  // Shared task creation handler
-  const handleAddTask = async (newTaskData) => {
-    const tempId = 'temp-' + Date.now();
-    const resolvedListId = newTaskData.list_id || (lists[0]?.id || null);
-    const optimisticTask = {
-      id: tempId,
-      title: newTaskData.title,
-      category: newTaskData.category || 'WORK',
-      priority: newTaskData.priority || 'medium',
-      due_date: newTaskData.due_date || null,
-      list_id: resolvedListId,
-      parent_task_id: newTaskData.parent_task_id || null,
-      progress: 0,
-      completed: false,
-      created_at: new Date().toISOString(),
-    };
-
-    setTasks(prev => [optimisticTask, ...prev]);
-
+  const handleAddTask = async input => {
+    const version = workspaceVersion.current;
     try {
-      const created = await createTask({ ...newTaskData, list_id: resolvedListId });
-      setTasks(prev => prev.map(t => t.id === tempId ? created : t));
+      const created = await createTask(input);
+      if (workspaceVersion.current !== version) return null;
+      taskWriteVersion.current++;
+      setTasks(prev => [created, ...prev]);
+      if (!lists.some(list => list.id === created.list_id) && created.list_id !== null) {
+        listLists().then(saved => {
+          if (workspaceVersion.current === version) setLists(saved);
+        }).catch(() => {
+          if (workspaceVersion.current === version) showToast('Could not refresh projects', 'error');
+        });
+      }
       showToast('Task created successfully', 'success');
-    } catch {
-      setTasks(prev => prev.filter(t => t.id !== tempId));
-      showToast('Failed to create task', 'error');
+      return created;
+    } catch (err) {
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to create task', 'error');
+      return null;
     }
   };
 
-  // Shared task deletion handler (with subtask cascade)
-  const handleDeleteTask = async (id) => {
-    const previous = tasks;
-    setTasks(prev => prev.filter(t => t.id !== id && t.parent_task_id !== id));
-    try {
-      await deleteTask(id);
-      showToast('Task removed', 'info');
-    } catch {
-      setTasks(previous);
-      showToast('Failed to delete task', 'error');
-    }
-  };
-
-  // Shared task update handler (title, priority, list_id reassignment, etc.)
   const handleUpdateTask = async (id, fields) => {
-    const previous = tasks;
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...fields } : t));
+    const version = workspaceVersion.current;
+    const pending = pendingTasks.current;
+    if (pending.has(id)) return null;
+    pending.add(id);
     try {
       const updated = await updateTask(id, fields);
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updated } : t));
-      if (fields.list_id !== undefined) {
-        showToast('Task moved to project', 'success');
+      if (workspaceVersion.current !== version) return null;
+      taskWriteVersion.current++;
+      setTasks(prev => {
+        const descendants = new Set([id]);
+        if (Object.hasOwn(fields, 'list_id')) {
+          for (const parentId of descendants) {
+            for (const task of prev) {
+              if (task.parent_task_id === parentId) descendants.add(task.id);
+            }
+          }
+        }
+        return prev.map(task => task.id === id ? updated
+          : descendants.has(task.id) ? { ...task, list_id: updated.list_id } : task);
+      });
+      if (updated.completed && updated.recurrence_rule) {
+        try {
+          await refreshTasks(version);
+        } catch {
+          if (workspaceVersion.current === version) showToast('Task saved. Reload to refresh the recurring schedule.', 'info');
+        }
       }
-    } catch {
-      setTasks(previous);
-      showToast('Failed to update task', 'error');
-    }
-  };
-
-  // Create list handler
-  const handleCreateList = async (listData) => {
-    try {
-      const created = await createList(listData);
-      setLists(prev => [...prev, created]);
-      showToast(`Project list "${created.title}" created`, 'success');
-      return created;
-    } catch {
-      showToast('Failed to create list', 'error');
-      return null;
-    }
-  };
-
-  // Update list handler (rename, color change)
-  const handleUpdateList = async (id, listData) => {
-    const previous = lists;
-    setLists(prev => prev.map(l => (l.id === id ? { ...l, ...listData } : l)));
-    try {
-      const updated = await updateList(id, listData);
-      setLists(prev => prev.map(l => (l.id === id ? updated : l)));
-      showToast(`Project updated`, 'success');
-      return updated;
-    } catch {
-      setLists(previous);
-      showToast('Failed to update project', 'error');
-      return null;
-    }
-  };
-
-  // Delete list handler (with safe task preservation)
-  const handleDeleteList = async (id) => {
-    const defaultList = lists.find(l => l.id !== id);
-    const defaultListId = defaultList ? defaultList.id : 1;
-    const previousLists = lists;
-    const previousTasks = tasks;
-
-    // Optimistically reassign tasks belonging to this list to default list
-    setTasks(prev => prev.map(t => t.list_id === id ? { ...t, list_id: defaultListId } : t));
-    setLists(prev => prev.filter(l => l.id !== id));
-
-    try {
-      await deleteList(id, defaultListId);
-      showToast(`Project deleted (tasks preserved in ${defaultList?.title || 'General'})`, 'info');
-    } catch {
-      setLists(previousLists);
-      setTasks(previousTasks);
-      showToast('Failed to delete project', 'error');
-    }
-  };
-
-  // Shared session logger
-  const handleLogSession = async (sessionData) => {
-    try {
-      const logged = await recordFocusSession(sessionData);
-      setSessions(prev => [logged, ...prev]);
-      showToast(`Logged ${sessionData.duration_minutes || 25}m focus session`, 'success');
+      return workspaceVersion.current === version ? updated : null;
     } catch (err) {
-      console.error('Failed to log session:', err);
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to update task', 'error');
+      return null;
+    } finally {
+      if (workspaceVersion.current === version) pending.delete(id);
     }
+  };
+
+  const handleToggleTask = task => handleUpdateTask(task.id, { completed: !task.completed });
+
+  const handleDeleteTask = async id => {
+    const version = workspaceVersion.current;
+    try {
+      await deleteTask(id);
+      if (workspaceVersion.current !== version) return;
+      taskWriteVersion.current++;
+      const removed = new Set([id]);
+      for (const parentId of removed) {
+        for (const task of tasks) {
+          if (task.parent_task_id === parentId) removed.add(task.id);
+        }
+      }
+      setTasks(prev => prev.filter(task => !removed.has(task.id)));
+      setSessions(prev => prev.map(session =>
+        removed.has(session.task_id) ? { ...session, task_id: null } : session));
+      showToast('Task removed', 'info');
+    } catch (err) {
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to delete task', 'error');
+    }
+  };
+
+  const handleCreateList = async input => {
+    const version = workspaceVersion.current;
+    try {
+      const created = await createList(input);
+      if (workspaceVersion.current !== version) return null;
+      setLists(prev => [...prev, created]);
+      showToast('Project created', 'success');
+      return created;
+    } catch (err) {
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to create project', 'error');
+      return null;
+    }
+  };
+
+  const handleUpdateList = async (id, fields) => {
+    const version = workspaceVersion.current;
+    try {
+      const updated = await updateList(id, fields);
+      if (workspaceVersion.current !== version) return null;
+      setLists(prev => prev.map(list => list.id === id ? updated : list));
+      showToast('Project updated', 'success');
+      return updated;
+    } catch (err) {
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to update project', 'error');
+      return null;
+    }
+  };
+
+  const handleDeleteList = async id => {
+    const version = workspaceVersion.current;
+    const destination = lists.find(list => list.id !== id);
+    try {
+      await deleteList(id, destination?.id ?? null);
+      if (workspaceVersion.current !== version) return;
+      taskWriteVersion.current++;
+      setLists(prev => prev.filter(list => list.id !== id));
+      setTasks(prev => prev.map(task => task.list_id === id ? { ...task, list_id: destination?.id ?? null } : task));
+      showToast('Project deleted and tasks preserved', 'info');
+    } catch (err) {
+      if (workspaceVersion.current === version) showToast(err.message || 'Failed to delete project', 'error');
+    }
+  };
+
+  const handleLogSession = async data => {
+    const version = workspaceVersion.current;
+    const id = data.client_session_id;
+    if (pendingSessionSaves.current.has(id)) return;
+    pendingSessionSaves.current.add(id);
+    const linkedTask = tasks.some(task => task.id === data.task_id);
+    try {
+      const logged = await recordFocusSession(linkedTask ? data : { ...data, task_id: null });
+      if (workspaceVersion.current !== version) return;
+      setSessions(prev => prev.some(row => row.id === logged.id) ? prev : [logged, ...prev]);
+      setFailedSessions(prev => prev.filter(row => row.client_session_id !== id));
+      showToast('Saved ' + logged.duration_minutes + 'm focus session', 'success');
+    } catch {
+      if (workspaceVersion.current !== version) return;
+      setFailedSessions(prev => prev.some(row => row.client_session_id === id) ? prev : [...prev, data]);
+      showToast('Focus session could not be saved. You can retry it from the sidebar.', 'error');
+    } finally {
+      if (workspaceVersion.current === version) pendingSessionSaves.current.delete(id);
+    }
+  };
+
+  const openCalendarDay = date => {
+    setCalendarTarget({ date });
+    setCurrentView('calendar');
   };
 
   // If unauthenticated, render the dedicated Login / Register landing page
@@ -302,7 +375,7 @@ export default function App() {
         />
         {/* Floating Toast Notification */}
         {toast && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
+          <div role={toast.type === 'error' ? 'alert' : 'status'} className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
             {toast.type === 'success' ? (
               <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
             ) : toast.type === 'error' ? (
@@ -324,13 +397,13 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#09090B] text-[#FAFAFA] font-sans antialiased overflow-hidden relative">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[#09090B] font-sans text-[#FAFAFA] antialiased xl:h-dvh xl:flex-row xl:overflow-hidden">
       
       {/* Persistent Left Sidebar Navigation */}
-      <aside className="w-64 border-r border-zinc-800 bg-[#09090B] flex flex-col justify-between p-4 shrink-0">
+      <aside className="flex w-full shrink-0 flex-col justify-between border-b border-zinc-800 bg-[#09090B] p-3 xl:w-64 xl:border-b-0 xl:border-r xl:p-4">
         <div>
           {/* Logo */}
-          <div className="flex items-center justify-between px-3 py-4 mb-6">
+          <div className="mb-2 flex items-center justify-between px-3 py-2 xl:mb-6 xl:py-4">
             <AlfaLogo 
               variant="full" 
               size="md" 
@@ -363,7 +436,7 @@ export default function App() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="grid grid-cols-2 gap-1 xl:block xl:space-y-1">
             <button 
               onClick={() => setCurrentView('today')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition ${
@@ -411,8 +484,27 @@ export default function App() {
         </div>
 
         {/* Bottom User & Streak Profile */}
-        <div className="pt-4 border-t border-zinc-800 space-y-3">
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#18181B] border border-zinc-800">
+        <div className="mt-2 space-y-2 border-t border-zinc-800 pt-2 xl:mt-0 xl:space-y-3 xl:pt-4">
+          {timer.hasRun && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
+              <button type="button" onClick={() => setCurrentView('today')} className="block max-w-full truncate text-xs text-emerald-400">
+                {timer.runTask?.title ?? 'General Focus'}
+              </button>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="font-mono">{timer.formattedTime}</span>
+                <button type="button" className="rounded-lg bg-zinc-800 px-2 py-1" onClick={toggleTimer}>
+                  {timer.isRunning ? 'Pause focus' : 'Resume focus'}
+                </button>
+              </div>
+            </div>
+          )}
+          {failedSessions.length > 0 && (
+            <button type="button" onClick={() => failedSessions.forEach(handleLogSession)}
+              className="w-full rounded-lg border border-amber-700 p-2 text-xs text-amber-300">
+              Retry {failedSessions.length} unsaved {failedSessions.length === 1 ? 'session' : 'sessions'}
+            </button>
+          )}
+          <div className="hidden items-center justify-between rounded-lg border border-zinc-800 bg-[#18181B] p-2.5 xl:flex">
             <div className="flex items-center gap-2">
               <Flame className={`w-5 h-5 ${userStreak > 0 ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}`} />
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Streak</span>
@@ -486,7 +578,12 @@ export default function App() {
             onToggleTask={handleToggleTask}
             onAddTask={handleAddTask}
             onDeleteTask={handleDeleteTask}
-            onLogSession={handleLogSession}
+            timer={timer}
+            activeTask={timer.hasRun ? timer.runTask : selectedFocusTask}
+            onSelectFocusTask={setSelectedFocusTaskId}
+            onStartTimer={startTimer}
+            onOpenTask={setInspectedTaskId}
+            ambient={ambient}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onShowToast={showToast}
           />
@@ -500,6 +597,8 @@ export default function App() {
             onAddTask={handleAddTask}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
+            projectTarget={projectTarget}
+            onOpenTask={setInspectedTaskId}
             onCreateList={handleCreateList}
             onUpdateList={handleUpdateList}
             onDeleteList={handleDeleteList}
@@ -508,8 +607,11 @@ export default function App() {
         )}
 
         {currentView === 'calendar' && (
-          <CalendarPlanner 
+          <CalendarPlanner
             tasks={tasks}
+            calendarTarget={calendarTarget}
+            onOpenTask={setInspectedTaskId}
+            onUpdateTask={handleUpdateTask}
             sessions={sessions}
             onAddTask={handleAddTask}
             onToggleTask={handleToggleTask}
@@ -519,7 +621,7 @@ export default function App() {
         )}
 
         {currentView === 'habits' && (
-          <HabitsHeatMap 
+          <HabitsHeatMap onOpenDay={openCalendarDay}
             tasks={tasks}
             sessions={sessions}
             currentUser={currentUser}
@@ -528,11 +630,34 @@ export default function App() {
         )}
       </ViewErrorBoundary>
 
+      {inspectedTask && (
+        <TaskInspector
+          key={inspectedTask.id}
+          task={inspectedTask}
+          project={lists.find(list => list.id === inspectedTask.list_id)}
+          canRepeat={inspectedTask.parent_task_id == null && !tasks.some(task => task.parent_task_id === inspectedTask.id)}
+          onSave={handleUpdateTask}
+          onClose={() => setInspectedTaskId(null)}
+          onOpenProject={() => {
+            setProjectTarget({ listId: inspectedTask.list_id, taskId: inspectedTask.id });
+            setCurrentView('lists');
+            setInspectedTaskId(null);
+          }}
+          onFocus={() => {
+            setSelectedFocusTaskId(inspectedTask.id);
+            setCurrentView('today');
+            setInspectedTaskId(null);
+            if (timer.hasRun) showToast('Task selected for your next focus session', 'info');
+          }}
+        />
+      )}
+
       {/* Settings & Shortcuts Modals */}
       <SettingsModal 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaveToast={showToast}
+        ambient={ambient}
       />
 
       <ShortcutsModal 
@@ -545,6 +670,10 @@ export default function App() {
         onClose={() => setIsCommandPaletteOpen(false)}
         tasks={tasks}
         onSelectView={setCurrentView}
+        onSelectTask={setInspectedTaskId}
+        onToggleTimer={toggleTimer}
+        onResetTimer={timer.reset}
+        ambient={ambient}
         onShowToast={showToast}
       />
 
@@ -553,14 +682,13 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         onAuthSuccess={(user) => {
           setCurrentUser(user);
-          loadAllData();
         }}
         onShowToast={showToast}
       />
 
       {/* Floating Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
+        <div role={toast.type === 'error' ? 'alert' : 'status'} className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#18181B] border border-zinc-700 shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
           {toast.type === 'success' ? (
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : toast.type === 'error' ? (

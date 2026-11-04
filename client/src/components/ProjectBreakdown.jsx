@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   FolderPlus, ChevronRight, ChevronDown, CheckCircle2, Circle, 
   Plus, MoreVertical, Trash2, Clock, CheckSquare, Calendar, Tag, Flag,
-  Kanban, List as ListIcon, ArrowRight, ArrowLeft, Edit3, Palette,
+  Kanban, List as ListIcon, Edit3, Palette,
   AlertCircle, X
 } from 'lucide-react';
+import ProjectBoard from './ProjectBoard';
 
 const COLOR_PALETTE = [
   '#10B981', // Emerald
@@ -20,7 +21,7 @@ const COLOR_PALETTE = [
 export default function ProjectBreakdown({ 
   tasks = [], 
   lists = [], 
-  onToggleTask, 
+  onToggleTask, onOpenTask, projectTarget,
   onAddTask, 
   onUpdateTask,
   onDeleteTask,
@@ -29,7 +30,7 @@ export default function ProjectBreakdown({
   onDeleteList,
   onShowToast
 }) {
-  const [selectedListId, setSelectedListId] = useState(lists[0]?.id || 1);
+  const [selectedListId, setSelectedListId] = useState(projectTarget ? projectTarget.listId : lists[0]?.id);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'board'
   const [expandedTasks, setExpandedTasks] = useState({ 1: true, 2: true });
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -56,13 +57,30 @@ export default function ProjectBreakdown({
 
   // Keep selectedListId valid when lists change
   useEffect(() => {
-    if (lists.length > 0 && !lists.some(l => l.id === selectedListId)) {
-      setSelectedListId(lists[0].id);
+    if (selectedListId !== null && !lists.some(l => l.id === selectedListId)) {
+      setSelectedListId(lists[0]?.id);
     }
   }, [lists, selectedListId]);
 
-  const activeList = lists.find(l => l.id === selectedListId) || lists[0] || { id: 1, title: 'My Tasks', color: '#10B981' };
-  const listTasks = tasks.filter(t => t.list_id === selectedListId || (!t.list_id && selectedListId === 1));
+  const activeList = lists.find(list => list.id === selectedListId) ?? { id: null, title: 'Unassigned', color: '#10B981' };
+  const listTasks = tasks.filter(task => (task.list_id ?? null) === (selectedListId ?? null));
+
+  useEffect(() => {
+    if (!projectTarget) return;
+    const target = tasks.find(task => task.id === projectTarget.taskId);
+    if (!target) return;
+    setSelectedListId(target.list_id ?? null);
+    setViewMode('list');
+    const parents = {};
+    let cursor = target;
+    while (cursor?.parent_task_id != null && !parents[cursor.parent_task_id]) {
+      parents[cursor.parent_task_id] = true;
+      cursor = tasks.find(task => task.id === cursor.parent_task_id);
+    }
+    setExpandedTasks(prev => ({ ...prev, ...parents }));
+    const frame = requestAnimationFrame(() => document.getElementById('project-task-' + target.id)?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [projectTarget]);
 
   // Separate root tasks from nested subtasks
   const rootTasks = listTasks.filter(t => !t.parent_task_id);
@@ -72,35 +90,36 @@ export default function ProjectBreakdown({
     setExpandedTasks(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleCreateRootTask = (e) => {
+  const handleCreateRootTask = async (e) => {
     e?.preventDefault();
     if (!newTaskTitle.trim()) return;
-    const targetId = selectedListId || (activeList?.id || (lists[0]?.id || null));
-    onAddTask({
+    const created = await onAddTask({
       title: newTaskTitle.trim(),
-      list_id: targetId,
+      list_id: selectedListId ?? null,
       priority: newTaskPriority,
       category: newTaskCategory,
       due_date: newTaskDueDate || null,
     });
-    setNewTaskTitle('');
-    setNewTaskDueDate('');
-    if (onShowToast) onShowToast(`Task added to ${activeList?.title || 'project'}`, 'success');
+    if (created) {
+      setNewTaskTitle('');
+      setNewTaskDueDate('');
+      setSelectedListId(created.list_id);
+    }
   };
 
-  const handleAddSubtask = (parentId) => {
+  const handleAddSubtask = async (parentId) => {
     if (!newSubtaskTitle.trim()) return;
-    const targetId = selectedListId || (activeList?.id || (lists[0]?.id || null));
-    onAddTask({
+    const created = await onAddTask({
       title: newSubtaskTitle.trim(),
       parent_task_id: parentId,
-      list_id: targetId,
-      category: activeList?.title?.toUpperCase() || 'WORK',
+      category: tasks.find(task => task.id === parentId)?.category ?? 'WORK',
       priority: 'medium',
     });
-    setNewSubtaskTitle('');
-    setAddingSubtaskForId(null);
-    if (onShowToast) onShowToast('Subtask added', 'success');
+    if (created) {
+      setNewSubtaskTitle('');
+      setAddingSubtaskForId(null);
+      setExpandedTasks(prev => ({ ...prev, [parentId]: true }));
+    }
   };
 
   const handleOpenEditModal = (list, e) => {
@@ -132,28 +151,39 @@ export default function ProjectBreakdown({
   const completedTasks = listTasks.filter(t => t.completed).length;
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Kanban column grouping
-  const todoTasks = rootTasks.filter(t => {
-    if (t.completed) return false;
-    const sub = getSubtasks(t.id);
-    const completedSub = sub.filter(st => st.completed).length;
-    return sub.length === 0 || completedSub === 0;
-  });
+  const boardTasks = rootTasks.map(task => ({
+    ...task,
+    status: task.status ?? (task.completed ? 'done'
+      : (task.progress > 0 && task.progress < 100) || getSubtasks(task.id).some(child => child.completed) ? 'in_progress' : 'todo'),
+  }));
 
-  const inProgressTasks = rootTasks.filter(t => {
-    if (t.completed) return false;
-    const sub = getSubtasks(t.id);
-    const completedSub = sub.filter(st => st.completed).length;
-    return (sub.length > 0 && completedSub > 0) || (t.progress > 0 && t.progress < 100);
-  });
-
-  const doneTasks = rootTasks.filter(t => t.completed);
+  const renderSubtasks = (parentId, ancestors = new Set()) => {
+    const visited = new Set([...ancestors, parentId]);
+    return getSubtasks(parentId).filter(task => !visited.has(task.id)).map(task => (
+      <div key={task.id} className="ml-5 border-l border-zinc-800 pl-3">
+        <div className="flex items-center gap-3 py-2">
+          <button type="button" onClick={() => onToggleTask?.(task)}
+            aria-label={(task.completed ? 'Reopen ' : 'Complete ') + task.title}
+            className="text-zinc-400 hover:text-emerald-400">
+            {task.completed ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4" />}
+          </button>
+          <button type="button" id={'project-task-' + task.id} onClick={() => onOpenTask?.(task.id)}
+            className={'min-w-0 flex-1 text-left text-xs hover:underline ' + (task.completed ? 'text-zinc-500 line-through' : 'text-zinc-300')}>
+            {task.title}
+          </button>
+          <button type="button" onClick={() => onDeleteTask?.(task.id)} aria-label={'Delete ' + task.title}
+            className="p-1 text-zinc-500 hover:text-rose-400"><Trash2 className="h-4 w-4" /></button>
+        </div>
+        {renderSubtasks(task.id, visited)}
+      </div>
+    ));
+  };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#09090B] text-[#FAFAFA]">
+    <div className="flex min-w-0 flex-1 flex-col bg-[#09090B] xl:flex-row xl:overflow-hidden text-[#FAFAFA]">
       
       {/* Sub-sidebar: Project Folders / Lists */}
-      <aside className="w-64 border-r border-zinc-800 bg-[#09090B] p-4 flex flex-col justify-between shrink-0">
+      <aside className="flex w-full shrink-0 flex-col justify-between border-b border-zinc-800 bg-[#09090B] p-4 xl:w-56 xl:overflow-y-auto xl:border-b-0 xl:border-r">
         <div>
           <div className="flex items-center justify-between mb-4 px-2">
             <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Project Folders</span>
@@ -313,10 +343,16 @@ export default function ProjectBreakdown({
             <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
+        {tasks.some(task => task.list_id == null) && (
+          <button type="button" onClick={() => setSelectedListId(null)}
+            className="mx-3 my-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">
+            Unassigned
+          </button>
+        )}
       </aside>
 
       {/* Main Breakdown Content */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-auto p-4 xl:p-8">
         <header className="mb-6 flex flex-wrap justify-between items-end gap-4 border-b border-zinc-800/80 pb-6">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-1">
@@ -451,211 +487,7 @@ export default function ProjectBreakdown({
 
         {/* ===================== VIEW MODE 1: KANBAN BOARD ===================== */}
         {viewMode === 'board' ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl pb-8">
-            
-            {/* Column 1: To Do */}
-            <div className="bg-[#121215] border border-zinc-800/90 rounded-2xl p-4 flex flex-col space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-400"></span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-200">To Do</span>
-                </div>
-                <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-mono">{todoTasks.length}</span>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto">
-                {todoTasks.length === 0 ? (
-                  <p className="text-xs text-zinc-600 text-center py-8">No tasks in To Do</p>
-                ) : (
-                  todoTasks.map(task => {
-                    const subtasks = getSubtasks(task.id);
-                    return (
-                      <div key={task.id} className="bg-[#18181B] border border-zinc-800 rounded-xl p-3.5 space-y-2.5 hover:border-zinc-700 transition shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <button 
-                            onClick={() => onToggleTask(task)}
-                            className="mt-0.5 text-zinc-400 hover:text-emerald-400 transition"
-                          >
-                            <Circle className="w-4 h-4" />
-                          </button>
-                          <span className="text-xs font-medium text-zinc-100 flex-1 leading-snug">{task.title}</span>
-                          <button 
-                            onClick={() => onDeleteTask(task.id)}
-                            className="text-zinc-600 hover:text-rose-400 p-0.5 transition"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {subtasks.length > 0 && (
-                          <div className="text-[11px] text-zinc-500 font-mono">
-                            0/{subtasks.length} subtasks
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                              task.priority === 'high' ? 'bg-rose-500/20 text-rose-300' :
-                              task.priority === 'medium' ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'
-                            }`}>
-                              {task.priority || 'medium'}
-                            </span>
-                            {lists.length > 1 && onUpdateTask && (
-                              <select
-                                value={task.list_id || selectedListId}
-                                onChange={(e) => onUpdateTask(task.id, { list_id: Number(e.target.value) || e.target.value })}
-                                className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 rounded px-1.5 py-0.5 focus:outline-none"
-                                title="Move to folder"
-                              >
-                                {lists.map(l => (
-                                  <option key={l.id} value={l.id}>{l.title}</option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={() => onToggleTask(task)}
-                            className="text-[10px] flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition"
-                            title="Mark Completed"
-                          >
-                            <span>Done</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Column 2: In Progress */}
-            <div className="bg-[#121215] border border-zinc-800/90 rounded-2xl p-4 flex flex-col space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-300">In Progress</span>
-                </div>
-                <span className="text-xs bg-zinc-800 text-amber-400 px-2 py-0.5 rounded-full font-mono">{inProgressTasks.length}</span>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto">
-                {inProgressTasks.length === 0 ? (
-                  <p className="text-xs text-zinc-600 text-center py-8">No tasks in progress</p>
-                ) : (
-                  inProgressTasks.map(task => {
-                    const subtasks = getSubtasks(task.id);
-                    const subCompleted = subtasks.filter(st => st.completed).length;
-                    const subProgress = subtasks.length > 0 ? Math.round((subCompleted / subtasks.length) * 100) : 0;
-
-                    return (
-                      <div key={task.id} className="bg-[#18181B] border border-zinc-800 rounded-xl p-3.5 space-y-2.5 hover:border-zinc-700 transition shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <button 
-                            onClick={() => onToggleTask(task)}
-                            className="mt-0.5 text-zinc-400 hover:text-emerald-400 transition"
-                          >
-                            <Circle className="w-4 h-4" />
-                          </button>
-                          <span className="text-xs font-medium text-zinc-100 flex-1 leading-snug">{task.title}</span>
-                          <button 
-                            onClick={() => onDeleteTask(task.id)}
-                            className="text-zinc-600 hover:text-rose-400 p-0.5 transition"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {subtasks.length > 0 && (
-                          <div className="space-y-1">
-                            <div className="w-full bg-zinc-800 h-1 rounded-full overflow-hidden">
-                              <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${subProgress}%` }} />
-                            </div>
-                            <span className="text-[10px] text-zinc-500 font-mono">{subCompleted}/{subtasks.length} subtasks ({subProgress}%)</span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
-                          <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                            task.priority === 'high' ? 'bg-rose-500/20 text-rose-300' :
-                            task.priority === 'medium' ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            {task.priority || 'medium'}
-                          </span>
-
-                          <button
-                            onClick={() => onToggleTask(task)}
-                            className="text-[10px] flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition"
-                            title="Mark Completed"
-                          >
-                            <span>Complete</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Column 3: Done */}
-            <div className="bg-[#121215] border border-zinc-800/90 rounded-2xl p-4 flex flex-col space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Done</span>
-                </div>
-                <span className="text-xs bg-zinc-800 text-emerald-400 px-2 py-0.5 rounded-full font-mono">{doneTasks.length}</span>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto">
-                {doneTasks.length === 0 ? (
-                  <p className="text-xs text-zinc-600 text-center py-8">No completed tasks yet</p>
-                ) : (
-                  doneTasks.map(task => (
-                    <div key={task.id} className="bg-[#18181B] border border-zinc-800 rounded-xl p-3.5 space-y-2 opacity-75 hover:opacity-100 transition shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <button 
-                          onClick={() => onToggleTask(task)}
-                          className="mt-0.5 text-emerald-400 hover:text-zinc-400 transition"
-                        >
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        </button>
-                        <span className="text-xs font-medium text-zinc-400 line-through flex-1 leading-snug">{task.title}</span>
-                        <button 
-                          onClick={() => onDeleteTask(task.id)}
-                          className="text-zinc-600 hover:text-rose-400 p-0.5 transition"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
-                        <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
-                          {task.category || 'WORK'}
-                        </span>
-                        <button
-                          onClick={() => onToggleTask(task)}
-                          className="text-[10px] flex items-center gap-1 text-zinc-400 hover:text-zinc-200 transition"
-                          title="Move back to To Do"
-                        >
-                          <ArrowLeft className="w-3 h-3" />
-                          <span>Reopen</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-          </div>
+          <ProjectBoard tasks={boardTasks} onMove={onUpdateTask} onOpenTask={onOpenTask} getSubtasks={getSubtasks} />
         ) : (
           /* ===================== VIEW MODE 2: HIERARCHICAL TREE LIST ===================== */
           <div className="space-y-4 max-w-5xl">
@@ -710,9 +542,9 @@ export default function ProjectBreakdown({
                         </button>
 
                         <div className="flex-1 min-w-0">
-                          <span className={`text-sm font-semibold truncate block ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
+                          <button type="button" id={'project-task-' + task.id} onClick={() => onOpenTask?.(task.id)} className={`max-w-full text-sm font-semibold truncate block text-left hover:underline ${task.completed ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
                             {task.title}
-                          </span>
+                          </button>
                           {subtasks.length > 0 && (
                             <div className="flex items-center gap-3 mt-1.5">
                               <div className="w-24 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
@@ -736,10 +568,12 @@ export default function ProjectBreakdown({
                         </span>
 
                         {/* Move Task to Another List Dropdown */}
-                        {lists.length > 1 && onUpdateTask && (
+                        {lists.length > 0 && onUpdateTask && (
                           <select
-                            value={task.list_id || selectedListId}
-                            onChange={(e) => onUpdateTask(task.id, { list_id: Number(e.target.value) || e.target.value })}
+                            value={task.list_id ?? ''}
+                            onChange={event => onUpdateTask(task.id, {
+                              list_id: lists.find(list => String(list.id) === event.target.value)?.id ?? null,
+                            })}
                             className="bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 rounded-lg px-2 py-1 focus:outline-none"
                             title="Move task to another folder"
                           >
@@ -801,28 +635,7 @@ export default function ProjectBreakdown({
                     {/* Nested Subtask Tree Children */}
                     {isExpanded && subtasks.length > 0 && (
                       <div className="bg-[#09090B]/50 border-t border-zinc-800/80 divide-y divide-zinc-800/40">
-                        {subtasks.map((st) => (
-                          <div key={st.id} className="py-2.5 px-6 pl-14 flex items-center justify-between gap-3 hover:bg-zinc-900/40 transition">
-                            <div className="flex items-center gap-3 flex-1">
-                              <button 
-                                onClick={() => onToggleTask(st)}
-                                className="text-zinc-400 hover:text-emerald-400 transition"
-                              >
-                                {st.completed ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4" />}
-                              </button>
-                              <span className={`text-xs ${st.completed ? 'line-through text-zinc-500' : 'text-zinc-300'}`}>
-                                {st.title}
-                              </span>
-                            </div>
-
-                            <button 
-                              onClick={() => onDeleteTask(st.id)}
-                              className="text-zinc-600 hover:text-red-400 p-1 rounded transition opacity-40 hover:opacity-100"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
+                        {renderSubtasks(task.id)}
                       </div>
                     )}
 

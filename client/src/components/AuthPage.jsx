@@ -4,7 +4,7 @@ import {
   ShieldCheck, Zap, Calendar, BarChart2, Layers 
 } from 'lucide-react';
 import AlfaLogo from './AlfaLogo';
-import { login, register } from '../api';
+import { login, register, USING_MOCK_API } from '../api';
 
 export default function AuthPage({ onAuthSuccess, onShowToast }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -53,20 +53,14 @@ export default function AuthPage({ onAuthSuccess, onShowToast }) {
     }
   };
 
-  const handleQuickEvaluatorLogin = async () => {
+  const handleDemoLogin = async () => {
     setLoading(true);
     setFormError(null);
     try {
-      const res = await login({ username: 'evaluator', password: 'password123' });
-      if (onShowToast) onShowToast(`Welcome, ${res.user?.username || 'Evaluator'}!`, 'success');
-      if (onAuthSuccess) onAuthSuccess(res.user || { id: 1, username: 'evaluator' });
+      const { user } = await login({ username: 'Demo' });
+      onAuthSuccess?.(user);
     } catch (err) {
-      // Graceful fallback to guarantee evaluator access if backend is initializing
-      const guestUser = { id: 1, username: 'Evaluator' };
-      localStorage.setItem('alfafocus_user', JSON.stringify(guestUser));
-      localStorage.setItem('alfafocus_token', 'evaluator_session_token');
-      if (onShowToast) onShowToast('Signed in as Evaluator', 'success');
-      if (onAuthSuccess) onAuthSuccess(guestUser);
+      setFormError(err.message || 'Could not open the demo workspace.');
     } finally {
       setLoading(false);
     }
@@ -185,22 +179,18 @@ export default function AuthPage({ onAuthSuccess, onShowToast }) {
             </button>
           </form>
 
-          {/* Quick Evaluator Access Section */}
-          <div className="pt-4 border-t border-zinc-800 space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-zinc-500">
-              <span>Evaluating or testing AlfaFocus?</span>
-              <span className="text-zinc-400 font-mono text-[10px]">evaluator / password123</span>
-            </div>
+          {USING_MOCK_API && (
             <button
               type="button"
-              onClick={handleQuickEvaluatorLogin}
+              onClick={handleDemoLogin}
               disabled={loading}
-              className="w-full py-2.5 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-200 font-semibold transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-200 font-semibold transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              1-Click Evaluator Access
+              Open demo workspace
             </button>
-          </div>
+          )}
+
 
         </div>
 

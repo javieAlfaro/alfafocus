@@ -16,6 +16,7 @@ export function useKeyboardShortcuts({
 }) {
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (event.defaultPrevented) return;
       // Ignore keystrokes if focused inside an editable field
       const activeElement = document.activeElement;
       const isInputFocused =
@@ -39,17 +40,18 @@ export function useKeyboardShortcuts({
       }
 
       // If user is typing in a form or input, don't trigger hotkeys
-      if (isInputFocused) return;
+      if (isInputFocused || event.ctrlKey || event.metaKey || event.altKey) return;
 
       // 3. Space: Toggle timer start/pause
-      if (event.code === 'Space') {
+      if (event.code === 'Space' && onToggleTimer &&
+          !activeElement?.closest('button, a, [role="button"], [data-rfd-drag-handle-draggable-id]')) {
         event.preventDefault();
         if (onToggleTimer) onToggleTimer();
         return;
       }
 
       // 4. 'R': Reset timer
-      if (event.key === 'r' || event.key === 'R') {
+      if (onResetTimer && event.key.toLowerCase() === 'r') {
         event.preventDefault();
         if (onResetTimer) onResetTimer();
         return;

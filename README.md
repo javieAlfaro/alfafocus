@@ -67,11 +67,10 @@ cp .env.example .env
 
 | Variable | Location | Example / Placeholder Value | Purpose |
 |---|---|---|---|
-| `VITE_USE_MOCK_API` | `client/.env` | `true` | When `true` (or unset), client uses browser `localStorage`. Set to `false` for live API. |
+| `VITE_USE_MOCK_API` | `client/.env` | `true` | Set to `true` for browser storage or `false` for the live API. Unset uses the live API. |
 | `VITE_API_BASE_URL` | `client/.env` | `http://localhost:3000` | Base URL of the Express backend API. |
-| `VITE_APP_PASSWORD` | `client/.env` | `alfa2026` | Access PIN sent in request headers to pass the server access gate. |
 | `DATABASE_URL` | `server/.env` | `postgres://user:password@localhost:5432/alfafocus` | PostgreSQL connection string (Supabase URI in production). |
-| `APP_PASSWORD` | `server/.env` | `alfa2026` | Master password for the app-level access gate. |
+| `JWT_SECRET` | `server/.env` | A long random value | Required in production to sign live workspace sessions. |
 | `CORS_ORIGINS` | `server/.env` | `http://localhost:5173,https://javiealfaro.github.io` | Comma-separated list of allowed origins. |
 | `PORT` | `server/.env` | `3000` | Port the Express server listens on (assigned by host in production). |
 
@@ -93,8 +92,14 @@ npm run db:reset
 
 ## 3. How to run it
 
+### Upgrading an existing live workspace
+
+Run `npm run db:schema` from `server` against a staging copy first, then against the live database before deploying the updated API and client. This adds task status, recurrence, and session retry fields and backfills existing board lanes. Use the schema command for upgrades. The seed command loads sample data.
+
+To run the PostgreSQL integration tests, set `TEST_DATABASE_URL` to a disposable PostgreSQL database and run `npm test` from `server`. The suite creates tables and fixture accounts. The normal client suite exercises the mock workspace. Set `WORKSPACE_TEST_API_URL` to a local test API to run the same UI workflow against HTTP.
+
 ### Running in Demo Mode (Client Only, No Database Required)
-Demo mode is the default and runs purely inside your browser:
+Set `VITE_USE_MOCK_API=true` in `client/.env` to run the demo workspace in your browser:
 ```bash
 cd client
 npm run dev
@@ -142,7 +147,7 @@ npm run dev
 | `GET` | `/api/focus/sessions` | Retrieve focus session history for the activity heat map | `200`, `401` |
 | `POST` | `/api/focus/sessions` | Record a completed focus session | `201`, `400`, `401` |
 
-> *Note: All `/api/*` endpoints require the `x-app-password` header matching the server's `APP_PASSWORD` environment variable.*
+> The browser signs in to obtain a JWT and sends it as a bearer token on protected routes. Set `ENABLE_LEGACY_ACCESS=true` with server-only `APP_USER` and `APP_PASSWORD` only when a separate evaluator setup needs Basic authentication.
 
 ---
 
@@ -218,7 +223,7 @@ alfafocus/
 * **Security & Auditing:** Completed and verified all 31 checks in [`SECURITY-CHECKLIST.md`](../project/SECURITY-CHECKLIST.md) (git secret scans, CORS named origins, input sanitization, app-level password gate).
 
 ### Next Steps for Week 3 (Final Increment & Presentation)
-1. Deploy the Express REST API server to **Render** with production environment variables (`DATABASE_URL`, `APP_PASSWORD`, `CORS_ORIGINS`).
+1. Deploy the Express REST API server to **Render** with production environment variables (`DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS`).
 2. Point the production client on GitHub Pages to the live Render API (`VITE_USE_MOCK_API=false`).
 3. Record the 3–5 minute final walkthrough presentation video demonstrating core workflows, responsive UI, database persistence, and security controls.
 4. Prepare the final slide deck and generate the required 1080x1080 promo square graphic for course submission.
