@@ -1,11 +1,16 @@
+import { existsSync, readFileSync } from 'node:fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+const secretFile = '/etc/secrets/JWT_SECRET';
+const configuredSecret = process.env.JWT_SECRET ||
+  (existsSync(secretFile) ? readFileSync(secretFile, 'utf8').trim() : '');
+
+if (process.env.NODE_ENV === 'production' && !configuredSecret) {
   throw new Error('JWT_SECRET is required in production');
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'alfafocus_jwt_secret_dev_key_2026';
+const JWT_SECRET = configuredSecret || 'alfafocus_jwt_secret_dev_key_2026';
 const TOKEN_EXPIRY = '7d';
 
 /**
